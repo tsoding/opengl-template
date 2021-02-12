@@ -5,6 +5,9 @@
 #include <string.h>
 #include <errno.h>
 
+#define GLEW_STATIC
+#include <GL/glew.h>
+
 #define GL_GLEXT_PROTOTYPES
 #include <GLFW/glfw3.h>
 
