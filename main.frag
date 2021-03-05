@@ -12,4 +12,4 @@ void main(void) {
         (cos(coord.y + time) + 1.0) / 2.0,
         (cos(coord.x + coord.y + time) + 1.0) / 2.0,
         1.0);
-};
+}

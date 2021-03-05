@@ -7,4 +7,4 @@ void main(void)
         2 * (gl_VertexID % 2) - 1,
         0.0,
         1.0);
-};
+}
