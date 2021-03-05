@@ -108,6 +108,7 @@ bool link_program(GLuint vert_shader, GLuint frag_shader, GLuint *program)
 
 bool program_failed = false;
 GLuint program = 0;
+GLint resolution_location = 0;
 
 void reload_shaders(void)
 {
@@ -137,6 +138,8 @@ void reload_shaders(void)
     }
 
     glUseProgram(program);
+
+    resolution_location = glGetUniformLocation(program, "resolution");
 
     printf("Successfully Reload the Shaders\n");
 }
@@ -218,6 +221,10 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT);
 
         if (!program_failed) {
+            glUniform2f(resolution_location,
+                        SCREEN_WIDTH,
+                        SCREEN_HEIGHT);
+
             glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
         }
 
