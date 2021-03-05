@@ -193,7 +193,7 @@ int main()
     GLFWwindow * const window = glfwCreateWindow(
                                     SCREEN_WIDTH,
                                     SCREEN_HEIGHT,
-                                    "atomato",
+                                    "OpenGL Template",
                                     NULL,
                                     NULL);
     if (window == NULL) {
