@@ -219,6 +219,11 @@ int main()
 
     glfwMakeContextCurrent(window);
 
+    if (GLEW_OK != glewInit()) {
+        fprintf(stderr, "Could not initialize GLEW!\n");
+        exit(1);
+    }
+
     init_failed_program();
     reload_shaders();
 
