@@ -106,68 +106,33 @@ bool link_program(GLuint vert_shader, GLuint frag_shader, GLuint *program)
     return program;
 }
 
+bool program_failed = false;
 GLuint program = 0;
-GLuint failed_program = 0;
-
-const char *failed_vert_source =
-    "#version 130\n"
-    "\n"
-    "void main(void)\n"
-    "{\n"
-    "    int gray = gl_VertexID ^ (gl_VertexID >> 1);\n"
-    "\n"
-    "    gl_Position = vec4(\n"
-    "        2 * (gray / 2) - 1,\n"
-    "        2 * (gray % 2) - 1,\n"
-    "        0.0,\n"
-    "        1.0);\n"
-    "};\n";
-
-const char *failed_frag_source =
-    "#version 130\n"
-    "\n"
-    "out vec4 color;\n"
-    "\n"
-    "void main(void) {\n"
-    "    color = vec4(1.0, 0.0, 0.0, 1.0);\n"
-    "};\n";
-
-
-void init_failed_program(void)
-{
-    GLuint vert = 0;
-    if (!compile_shader_source(failed_vert_source, GL_VERTEX_SHADER, &vert)) {
-        exit(1);
-    }
-
-    GLuint frag = 0;
-    if (!compile_shader_source(failed_frag_source, GL_FRAGMENT_SHADER, &frag)) {
-        exit(1);
-    }
-
-    if (!link_program(vert, frag, &failed_program)) {
-        exit(1);
-    }
-}
 
 void reload_shaders(void)
 {
     glDeleteProgram(program);
 
+    program_failed = false;
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+
     GLuint vert = 0;
     if (!compile_shader_file("./main.vert", GL_VERTEX_SHADER, &vert)) {
-        glUseProgram(failed_program);
+        glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+        program_failed = true;
         return;
     }
 
     GLuint frag = 0;
     if (!compile_shader_file("./main.frag", GL_FRAGMENT_SHADER, &frag)) {
-        glUseProgram(failed_program);
+        glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+        program_failed = true;
         return;
     }
 
     if (!link_program(vert, frag, &program)) {
-        glUseProgram(failed_program);
+        glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+        program_failed = true;
         return;
     }
 
@@ -224,7 +189,6 @@ int main()
         exit(1);
     }
 
-    init_failed_program();
     reload_shaders();
 
     glfwSetKeyCallback(window, key_callback);
@@ -233,7 +197,9 @@ int main()
     while (!glfwWindowShouldClose(window)) {
         glClear(GL_COLOR_BUFFER_BIT);
 
-        glDrawArrays(GL_QUADS, 0, 4);
+        if (!program_failed) {
+            glDrawArrays(GL_QUADS, 0, 4);
+        }
 
         glfwSwapBuffers(window);
         glfwPollEvents();
