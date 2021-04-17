@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <errno.h>
+#include <math.h>
 
 #define GLEW_STATIC
 #include <GL/glew.h>
