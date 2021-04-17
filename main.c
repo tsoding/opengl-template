@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -14,6 +15,7 @@
 
 #define SCREEN_WIDTH 1024
 #define SCREEN_HEIGHT 768
+#define MANUAL_TIME_STEP 0.1
 
 float lerp(float a, float b, float t)
 {
@@ -115,6 +117,7 @@ bool link_program(GLuint vert_shader, GLuint frag_shader, GLuint *program)
 
 // Global variables (fragile people with CS degree look away)
 bool program_failed = false;
+double time = 0.0;
 GLuint program = 0;
 GLint resolution_uniform = 0;
 GLint time_uniform = 0;
@@ -167,6 +170,14 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
             reload_shaders();
         } else if (key == GLFW_KEY_SPACE) {
             pause = !pause;
+        }
+
+        if (pause) {
+            if (key == GLFW_KEY_LEFT) {
+                time -= MANUAL_TIME_STEP;
+            } else if (key == GLFW_KEY_RIGHT) {
+                time += MANUAL_TIME_STEP;
+            }
         }
     }
 }
@@ -237,7 +248,7 @@ int main()
     glfwSetKeyCallback(window, key_callback);
     glfwSetFramebufferSizeCallback(window, window_size_callback);
 
-    double time = glfwGetTime();
+    time = glfwGetTime();
     double prev_time;
     while (!glfwWindowShouldClose(window)) {
         glClear(GL_COLOR_BUFFER_BIT);
