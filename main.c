@@ -100,8 +100,8 @@ bool link_program(GLuint vert_shader, GLuint frag_shader, GLuint *program)
 // Global variables (fragile people with CS degree look away)
 bool program_failed = false;
 GLuint program = 0;
-GLint resolution_location = 0;
-GLint time_location = 0;
+GLint resolution_uniform = 0;
+GLint time_uniform = 0;
 bool pause = false;
 
 void reload_shaders(void)
@@ -133,8 +133,8 @@ void reload_shaders(void)
 
     glUseProgram(program);
 
-    resolution_location = glGetUniformLocation(program, "resolution");
-    time_location = glGetUniformLocation(program, "time");
+    resolution_uniform = glGetUniformLocation(program, "resolution");
+    time_uniform = glGetUniformLocation(program, "time");
 
     printf("Successfully Reload the Shaders\n");
 }
@@ -222,10 +222,10 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT);
 
         if (!program_failed) {
-            glUniform2f(resolution_location,
+            glUniform2f(resolution_uniform,
                         SCREEN_WIDTH,
                         SCREEN_HEIGHT);
-            glUniform1f(time_location, time);
+            glUniform1f(time_uniform, time);
 
             glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
         }
