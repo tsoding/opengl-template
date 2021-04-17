@@ -14,23 +14,14 @@
 #define SCREEN_WIDTH 1024
 #define SCREEN_HEIGHT 768
 
-void panic_errno(const char *fmt, ...)
-{
-    fprintf(stderr, "ERROR: ");
-
-    va_list args;
-    va_start(args, fmt);
-    vfprintf(stderr, fmt, args);
-    va_end(args);
-
-    fprintf(stderr, ": %s\n", strerror(errno));
-
-    exit(1);
-}
-
 char *slurp_file(const char *file_path)
 {
-#define SLURP_FILE_PANIC panic_errno("Could not read file `%s`", file_path)
+#define SLURP_FILE_PANIC \
+    do { \
+        fprintf(stderr, "Could not read file `%s`: %s\n", file_path, strerror(errno)); \
+        exit(1); \
+    } while (0)
+
     FILE *f = fopen(file_path, "r");
     if (f == NULL) SLURP_FILE_PANIC;
     if (fseek(f, 0, SEEK_END) < 0) SLURP_FILE_PANIC;
