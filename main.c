@@ -15,6 +15,11 @@
 #define SCREEN_WIDTH 1024
 #define SCREEN_HEIGHT 768
 
+float lerp(float a, float b, float t)
+{
+    return a + (b - a) * t;
+}
+
 char *slurp_file(const char *file_path)
 {
 #define SLURP_FILE_PANIC \
