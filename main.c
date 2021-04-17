@@ -45,6 +45,15 @@ char *slurp_file(const char *file_path)
 #undef SLURP_FILE_PANIC
 }
 
+const char *shader_type_as_cstr(GLuint shader)
+{
+    switch (shader) {
+    case GL_VERTEX_SHADER:   return "GL_VERTEX_SHADER";
+    case GL_FRAGMENT_SHADER: return "GL_FRAGMENT_SHADER";
+    default:                 return "(Unknown)";
+    }
+}
+
 bool compile_shader_source(const GLchar *source, GLenum shader_type, GLuint *shader)
 {
     *shader = glCreateShader(shader_type);
@@ -58,6 +67,7 @@ bool compile_shader_source(const GLchar *source, GLenum shader_type, GLuint *sha
         GLchar message[1024];
         GLsizei message_size = 0;
         glGetShaderInfoLog(*shader, sizeof(message), &message_size, message);
+        fprintf(stderr, "ERROR: could not compile %s\n", shader_type_as_cstr(shader_type));
         fprintf(stderr, "%.*s\n", message_size, message);
         return false;
     }
