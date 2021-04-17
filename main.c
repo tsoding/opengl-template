@@ -208,6 +208,11 @@ int main()
         exit(1);
     }
 
+    if (!GLEW_EXT_draw_instanced) {
+        fprintf(stderr, "Support for EXT_draw_instanced is required!\n");
+        exit(1);
+    }
+
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(MessageCallback, 0);
 
@@ -227,7 +232,7 @@ int main()
                         SCREEN_HEIGHT);
             glUniform1f(time_uniform, time);
 
-            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+            glDrawArraysInstancedEXT(GL_TRIANGLE_STRIP, 0, 4, 1);
         }
 
         glfwSwapBuffers(window);
