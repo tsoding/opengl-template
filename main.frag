@@ -1,4 +1,6 @@
-#version 130
+#version 300 es
+
+precision mediump float;
 
 uniform vec2 resolution;
 uniform float time;
