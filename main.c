@@ -86,9 +86,12 @@ bool compile_shader_source(const GLchar *source, GLenum shader_type, GLuint *sha
 bool compile_shader_file(const char *file_path, GLenum shader_type, GLuint *shader)
 {
     char *source = slurp_file(file_path);
-    bool err = compile_shader_source(source, shader_type, shader);
+    bool ok = compile_shader_source(source, shader_type, shader);
+    if (!ok) {
+        fprintf(stderr, "ERROR: failed to compile `%s` shader file\n", file_path);
+    }
     free(source);
-    return err;
+    return ok;
 }
 
 bool link_program(GLuint vert_shader, GLuint frag_shader, GLuint *program)
