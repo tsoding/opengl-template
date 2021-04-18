@@ -127,28 +127,25 @@ void reload_shaders(void)
 {
     glDeleteProgram(program);
 
-    program_failed = false;
-    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    program_failed = true;
+    glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
 
     GLuint vert = 0;
     if (!compile_shader_file("./main.vert", GL_VERTEX_SHADER, &vert)) {
-        glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
-        program_failed = true;
         return;
     }
 
     GLuint frag = 0;
     if (!compile_shader_file("./main.frag", GL_FRAGMENT_SHADER, &frag)) {
-        glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
-        program_failed = true;
         return;
     }
 
     if (!link_program(vert, frag, &program)) {
-        glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
-        program_failed = true;
         return;
     }
+
+    program_failed = false;
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
     glUseProgram(program);
 
