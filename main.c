@@ -54,9 +54,12 @@ char *slurp_file(const char *file_path)
 const char *shader_type_as_cstr(GLuint shader)
 {
     switch (shader) {
-    case GL_VERTEX_SHADER:   return "GL_VERTEX_SHADER";
-    case GL_FRAGMENT_SHADER: return "GL_FRAGMENT_SHADER";
-    default:                 return "(Unknown)";
+    case GL_VERTEX_SHADER:
+        return "GL_VERTEX_SHADER";
+    case GL_FRAGMENT_SHADER:
+        return "GL_FRAGMENT_SHADER";
+    default:
+        return "(Unknown)";
     }
 }
 
@@ -119,39 +122,52 @@ bool link_program(GLuint vert_shader, GLuint frag_shader, GLuint *program)
 // Global variables (fragile people with CS degree look away)
 bool program_failed = false;
 double time = 0.0;
-GLuint program = 0;
-GLint resolution_uniform = 0;
-GLint time_uniform = 0;
+GLuint main_program = 0;
+GLint main_resolution_uniform = 0;
+GLint main_time_uniform = 0;
 bool pause = false;
+
+bool load_shader_program(const char *vertex_file_path,
+                         const char *fragment_file_path,
+                         GLuint *program)
+{
+    GLuint vert = 0;
+    if (!compile_shader_file(vertex_file_path, GL_VERTEX_SHADER, &vert)) {
+        return false;
+    }
+
+    GLuint frag = 0;
+    if (!compile_shader_file(fragment_file_path, GL_FRAGMENT_SHADER, &frag)) {
+        return false;
+    }
+
+    if (!link_program(vert, frag, program)) {
+        return false;
+    }
+
+    return true;
+}
 
 void reload_shaders(void)
 {
-    glDeleteProgram(program);
+    glDeleteProgram(main_program);
 
     program_failed = true;
     glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
 
-    GLuint vert = 0;
-    if (!compile_shader_file("./main.vert", GL_VERTEX_SHADER, &vert)) {
-        return;
-    }
+    {
+        if (!load_shader_program("main.vert", "main.frag", &main_program)) {
+            return;
+        }
 
-    GLuint frag = 0;
-    if (!compile_shader_file("./main.frag", GL_FRAGMENT_SHADER, &frag)) {
-        return;
-    }
+        glUseProgram(main_program);
 
-    if (!link_program(vert, frag, &program)) {
-        return;
+        main_resolution_uniform = glGetUniformLocation(main_program, "resolution");
+        main_time_uniform = glGetUniformLocation(main_program, "time");
     }
 
     program_failed = false;
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-
-    glUseProgram(program);
-
-    resolution_uniform = glGetUniformLocation(program, "resolution");
-    time_uniform = glGetUniformLocation(program, "time");
 
     printf("Successfully Reload the Shaders\n");
 }
@@ -257,10 +273,10 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT);
 
         if (!program_failed) {
-            glUniform2f(resolution_uniform,
+            glUniform2f(main_resolution_uniform,
                         SCREEN_WIDTH,
                         SCREEN_HEIGHT);
-            glUniform1f(time_uniform, time);
+            glUniform1f(main_time_uniform, time);
 
             glDrawArraysInstancedEXT(GL_TRIANGLE_STRIP, 0, 4, 1);
         }
