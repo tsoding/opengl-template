@@ -7,6 +7,12 @@ typedef struct {
     float x, y;
 } V2;
 
+#define RGBA_COUNT 4
+
+typedef struct {
+    float r, g, b, a;
+} RGBA;
+
 static inline float lerp(float a, float b, float t)
 {
     return a + (b - a) * t;
