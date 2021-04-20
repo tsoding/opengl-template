@@ -7,6 +7,8 @@
 #include <errno.h>
 #include <math.h>
 
+#include "oglt_math.h"
+
 #define GLEW_STATIC
 #include <GL/glew.h>
 
@@ -17,10 +19,6 @@
 #define SCREEN_HEIGHT 768
 #define MANUAL_TIME_STEP 0.1
 
-float lerp(float a, float b, float t)
-{
-    return a + (b - a) * t;
-}
 
 char *slurp_file(const char *file_path)
 {
