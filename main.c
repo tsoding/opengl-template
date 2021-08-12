@@ -117,12 +117,25 @@ bool link_program(GLuint vert_shader, GLuint frag_shader, GLuint *program)
     return program;
 }
 
+typedef enum {
+    RESOLUTION_UNIFORM = 0,
+    TIME_UNIFORM,
+    MOUSE_UNIFORM,
+    COUNT_UNIFORMS
+} Uniform;
+
+static_assert(COUNT_UNIFORMS == 3, "Update list of uniform names");
+static const char *uniform_names[COUNT_UNIFORMS] = {
+    [RESOLUTION_UNIFORM] = "resolution",
+    [TIME_UNIFORM] = "time",
+    [MOUSE_UNIFORM] = "mouse",
+};
+
 // Global variables (fragile people with CS degree look away)
 bool program_failed = false;
 double time = 0.0;
 GLuint main_program = 0;
-GLint main_resolution_uniform = 0;
-GLint main_time_uniform = 0;
+GLint main_uniforms[COUNT_UNIFORMS];
 bool pause = false;
 
 bool load_shader_program(const char *vertex_file_path,
@@ -160,8 +173,9 @@ void reload_shaders(void)
 
         glUseProgram(main_program);
 
-        main_resolution_uniform = glGetUniformLocation(main_program, "resolution");
-        main_time_uniform = glGetUniformLocation(main_program, "time");
+        for (Uniform index = 0; index < COUNT_UNIFORMS; ++index) {
+            main_uniforms[index] = glGetUniformLocation(main_program, uniform_names[index]);
+        }
     }
 
     program_failed = false;
@@ -267,10 +281,11 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT);
 
         if (!program_failed) {
+            static_assert(COUNT_UNIFORMS == 3, "Update the uniform sync");
             int width, height;
             glfwGetWindowSize(window, &width, &height);
-            glUniform2f(main_resolution_uniform, width, height);
-            glUniform1f(main_time_uniform, time);
+            glUniform2f(main_uniforms[RESOLUTION_UNIFORM], width, height);
+            glUniform1f(main_uniforms[TIME_UNIFORM], time);
             glDrawArraysInstancedEXT(GL_TRIANGLE_STRIP, 0, 4, 1);
         }
 
