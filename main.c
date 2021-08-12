@@ -13,8 +13,8 @@
 #define GL_GLEXT_PROTOTYPES
 #include <GLFW/glfw3.h>
 
-#define SCREEN_WIDTH 1024
-#define SCREEN_HEIGHT 768
+#define SCREEN_WIDTH 1600
+#define SCREEN_HEIGHT 900
 #define MANUAL_TIME_STEP 0.1
 
 
