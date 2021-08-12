@@ -2,8 +2,6 @@
 
 Just a simple OpenGL template that I use on my streams.
 
-![thumbnail](./thumbnail.png)
-
 ## Controls
 
 | Shortcut         | Description                                                                                                                                                               |
