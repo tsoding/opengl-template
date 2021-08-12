@@ -7,8 +7,6 @@
 #include <errno.h>
 #include <math.h>
 
-#include "oglt_math.h"
-
 #define GLEW_STATIC
 #include <GL/glew.h>
 
