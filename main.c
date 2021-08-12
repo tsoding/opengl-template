@@ -13,8 +13,8 @@
 #define GL_GLEXT_PROTOTYPES
 #include <GLFW/glfw3.h>
 
-#define SCREEN_WIDTH 1600
-#define SCREEN_HEIGHT 900
+#define DEFAULT_SCREEN_WIDTH 1600
+#define DEFAULT_SCREEN_HEIGHT 900
 #define MANUAL_TIME_STEP 0.1
 
 
@@ -199,11 +199,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 void window_size_callback(GLFWwindow* window, int width, int height)
 {
     (void) window;
-    glViewport(
-        width / 2 - SCREEN_WIDTH / 2,
-        height / 2 - SCREEN_HEIGHT / 2,
-        SCREEN_WIDTH,
-        SCREEN_HEIGHT);
+    glViewport(0, 0, width, height);
 }
 
 void MessageCallback(GLenum source,
@@ -231,8 +227,8 @@ int main()
     }
 
     GLFWwindow * const window = glfwCreateWindow(
-                                    SCREEN_WIDTH,
-                                    SCREEN_HEIGHT,
+                                    DEFAULT_SCREEN_WIDTH,
+                                    DEFAULT_SCREEN_HEIGHT,
                                     "OpenGL Template",
                                     NULL,
                                     NULL);
@@ -271,11 +267,10 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT);
 
         if (!program_failed) {
-            glUniform2f(main_resolution_uniform,
-                        SCREEN_WIDTH,
-                        SCREEN_HEIGHT);
+            int width, height;
+            glfwGetWindowSize(window, &width, &height);
+            glUniform2f(main_resolution_uniform, width, height);
             glUniform1f(main_time_uniform, time);
-
             glDrawArraysInstancedEXT(GL_TRIANGLE_STRIP, 0, 4, 1);
         }
 
