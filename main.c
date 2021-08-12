@@ -286,6 +286,9 @@ int main()
             glfwGetWindowSize(window, &width, &height);
             glUniform2f(main_uniforms[RESOLUTION_UNIFORM], width, height);
             glUniform1f(main_uniforms[TIME_UNIFORM], time);
+            double xpos, ypos;
+            glfwGetCursorPos(window, &xpos, &ypos);
+            glUniform2f(main_uniforms[MOUSE_UNIFORM], xpos, height - ypos);
             glDrawArraysInstancedEXT(GL_TRIANGLE_STRIP, 0, 4, 1);
         }
 
