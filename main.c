@@ -7,16 +7,13 @@
 #include <errno.h>
 #include <math.h>
 
-#define GLEW_STATIC
-#include <GL/glew.h>
-
-#define GL_GLEXT_PROTOTYPES
 #include <GLFW/glfw3.h>
 
 #define DEFAULT_SCREEN_WIDTH 1600
 #define DEFAULT_SCREEN_HEIGHT 900
 #define MANUAL_TIME_STEP 0.1
 
+#include "glextloader.c"
 
 char *slurp_file(const char *file_path)
 {
@@ -254,18 +251,17 @@ int main()
 
     glfwMakeContextCurrent(window);
 
-    if (GLEW_OK != glewInit()) {
-        fprintf(stderr, "Could not initialize GLEW!\n");
-        exit(1);
-    }
+    load_gl_extensions();
 
-    if (!GLEW_EXT_draw_instanced) {
+    if (glDrawArraysInstanced == NULL) {
         fprintf(stderr, "Support for EXT_draw_instanced is required!\n");
         exit(1);
     }
 
-    glEnable(GL_DEBUG_OUTPUT);
-    glDebugMessageCallback(MessageCallback, 0);
+    if (glDebugMessageCallback != NULL) {
+        glEnable(GL_DEBUG_OUTPUT);
+        glDebugMessageCallback(MessageCallback, 0);
+    }
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -289,7 +285,7 @@ int main()
             double xpos, ypos;
             glfwGetCursorPos(window, &xpos, &ypos);
             glUniform2f(main_uniforms[MOUSE_UNIFORM], xpos, height - ypos);
-            glDrawArraysInstancedEXT(GL_TRIANGLE_STRIP, 0, 4, 1);
+            glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, 1);
         }
 
         glfwSwapBuffers(window);
