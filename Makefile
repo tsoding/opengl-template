@@ -1,6 +1,6 @@
-GL_PKGS=glfw3 glew
+PKGS=glfw3 gl
 CFLAGS=-Wall -Wextra -ggdb
 
 main: main.c
-	$(CC) $(CFLAGS) `pkg-config --cflags $(GL_PKGS)` -o main main.c `pkg-config --libs $(GL_PKGS)` -lm
+	$(CC) $(CFLAGS) `pkg-config --cflags $(PKGS)` -o main main.c `pkg-config --libs $(PKGS)` -lm
 
