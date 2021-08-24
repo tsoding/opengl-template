@@ -6,7 +6,7 @@ uniform vec2 resolution;
 uniform float time;
 uniform vec2 mouse;
 
-out vec4 color;
+out vec4 out_color;
 
 #define R 500.0
 
@@ -16,7 +16,7 @@ void main(void) {
 
     float t = 1.0 - min(length(coord_uv - mouse_uv), R) / R;
 
-    color = vec4(
+    out_color = vec4(
         (sin(t*(coord_uv.x + time)) + 1.0) / 2.0,
         (cos(t*(coord_uv.y + time)) + 1.0) / 2.0,
         (cos(t*(coord_uv.x + coord_uv.y + time)) + 1.0) / 2.0,
