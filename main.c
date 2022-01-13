@@ -157,49 +157,55 @@ typedef struct {
     V4f color;
 } Vertex;
 
-// Global variables (fragile people with CS degree look away)
-bool program_failed = false;
-double time = 0.0;
-GLuint main_program = 0;
-GLint main_uniforms[COUNT_UNIFORMS];
-bool pause = false;
-
 #define VERTEX_BUF_CAP (8 * 1024)
-Vertex vertex_buf[VERTEX_BUF_CAP];
-size_t vertex_buf_sz = 0;
+typedef struct {
+    GLuint vao;
+    GLuint vbo;
+    bool program_failed;
+    GLuint program;
+    GLint uniforms[COUNT_UNIFORMS];
+    Vertex vertex_buf[VERTEX_BUF_CAP];
+    size_t vertex_buf_sz;
+} Renderer;
 
-void vertex_buf_push(V2f pos, V2f uv, V4f color)
+// Global variables (fragile people with CS degree look away)
+static double time = 0.0;
+static bool pause = false;
+static Renderer global_renderer = {0};
+
+void renderer_push_vertex(Renderer *r, V2f pos, V2f uv, V4f color)
 {
-    assert(vertex_buf_sz < VERTEX_BUF_CAP);
-    vertex_buf[vertex_buf_sz].pos = pos;
-    vertex_buf[vertex_buf_sz].uv = uv;
-    vertex_buf[vertex_buf_sz].color = color;
-    vertex_buf_sz += 1;
+    assert(r->vertex_buf_sz < VERTEX_BUF_CAP);
+    r->vertex_buf[r->vertex_buf_sz].pos = pos;
+    r->vertex_buf[r->vertex_buf_sz].uv = uv;
+    r->vertex_buf[r->vertex_buf_sz].color = color;
+    r->vertex_buf_sz += 1;
 }
 
-void vertex_buf_push_quad(V2f p1, V2f p2, V4f color)
+void renderer_push_quad(Renderer *r, V2f p1, V2f p2, V4f color)
 {
     V2f a = p1;
     V2f b = v2f(p2.x, p1.y);
     V2f c = v2f(p1.x, p2.y);
     V2f d = p2;
 
-    vertex_buf_push(a, v2f(0.0f, 0.0f), color);
-    vertex_buf_push(b, v2f(1.0f, 0.0f), color);
-    vertex_buf_push(c, v2f(0.0f, 1.0f), color);
+    renderer_push_vertex(r, a, v2f(0.0f, 0.0f), color);
+    renderer_push_vertex(r, b, v2f(1.0f, 0.0f), color);
+    renderer_push_vertex(r, c, v2f(0.0f, 1.0f), color);
 
-    vertex_buf_push(b, v2f(1.0f, 0.0f), color);
-    vertex_buf_push(c, v2f(0.0f, 1.0f), color);
-    vertex_buf_push(d, v2f(1.0f, 1.0f), color);
+    renderer_push_vertex(r, b, v2f(1.0f, 0.0f), color);
+    renderer_push_vertex(r, c, v2f(0.0f, 1.0f), color);
+    renderer_push_vertex(r, d, v2f(1.0f, 1.0f), color);
 }
 
-void vertex_buf_push_checker_board(int grid_size)
+void renderer_push_checker_board(Renderer *r, int grid_size)
 {
     float cell_width = 2.0f/grid_size;
     float cell_height = 2.0f/grid_size;
     for (int y = 0; y < grid_size; ++y) {
         for (int x = 0; x < grid_size; ++x) {
-            vertex_buf_push_quad(
+            renderer_push_quad(
+                r,
                 v2f(-1.0f + x*cell_width, -1.0f + y*cell_height),
                 v2f(-1.0f + (x + 1)*cell_width, -1.0f + (y + 1)*cell_height),
                 (x + y)%2 == 0 ? v4f(1.0f, 0.0f, 0.0f, 1.0f) : v4f(0.0f, 0.0f, 0.0f, 1.0f));
@@ -207,12 +213,12 @@ void vertex_buf_push_checker_board(int grid_size)
     }
 }
 
-void vertex_buf_sync(void)
+void renderer_sync(Renderer *r)
 {
     glBufferSubData(GL_ARRAY_BUFFER,
                     0,
-                    sizeof(Vertex) * vertex_buf_sz,
-                    vertex_buf);
+                    sizeof(Vertex) * r->vertex_buf_sz,
+                    r->vertex_buf);
 }
 
 bool load_shader_program(const char *vertex_file_path,
@@ -236,26 +242,26 @@ bool load_shader_program(const char *vertex_file_path,
     return true;
 }
 
-void reload_shaders(void)
+void renderer_reload_shaders(Renderer *r)
 {
-    glDeleteProgram(main_program);
+    glDeleteProgram(r->program);
 
-    program_failed = true;
+    r->program_failed = true;
     glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
 
     {
-        if (!load_shader_program("main.vert", "main.frag", &main_program)) {
+        if (!load_shader_program("main.vert", "main.frag", &r->program)) {
             return;
         }
 
-        glUseProgram(main_program);
+        glUseProgram(r->program);
 
         for (Uniform index = 0; index < COUNT_UNIFORMS; ++index) {
-            main_uniforms[index] = glGetUniformLocation(main_program, uniform_names[index]);
+            r->uniforms[index] = glGetUniformLocation(r->program, uniform_names[index]);
         }
     }
 
-    program_failed = false;
+    r->program_failed = false;
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
     printf("Successfully Reload the Shaders\n");
@@ -270,7 +276,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 
     if (action == GLFW_PRESS) {
         if (key == GLFW_KEY_F5) {
-            reload_shaders();
+            renderer_reload_shaders(&global_renderer);
         } else if (key == GLFW_KEY_SPACE) {
             pause = !pause;
         } else if (key == GLFW_KEY_Q) {
@@ -308,6 +314,40 @@ void MessageCallback(GLenum source,
     fprintf(stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
             (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
             type, severity, message);
+}
+
+void renderer_init(Renderer *r)
+{
+    glGenVertexArrays(1, &r->vao);
+    glBindVertexArray(r->vao);
+
+    glGenBuffers(1, &r->vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, r->vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(r->vertex_buf), r->vertex_buf, GL_DYNAMIC_DRAW);
+
+    glEnableVertexAttribArray(VA_POS);
+    glVertexAttribPointer(VA_POS,
+                          2,
+                          GL_FLOAT,
+                          GL_FALSE,
+                          sizeof(Vertex),
+                          (void*) offsetof(Vertex, pos));
+
+    glEnableVertexAttribArray(VA_UV);
+    glVertexAttribPointer(VA_UV,
+                          2,
+                          GL_FLOAT,
+                          GL_FALSE,
+                          sizeof(Vertex),
+                          (void*) offsetof(Vertex, uv));
+
+    glEnableVertexAttribArray(VA_COLOR);
+    glVertexAttribPointer(VA_COLOR,
+                          4,
+                          GL_FLOAT,
+                          GL_FALSE,
+                          sizeof(Vertex),
+                          (void*) offsetof(Vertex, color));
 }
 
 int main()
@@ -354,43 +394,14 @@ int main()
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    GLuint vao;
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
+    renderer_init(&global_renderer);
 
-    GLuint vbo;
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_buf), vertex_buf, GL_DYNAMIC_DRAW);
 
-    glEnableVertexAttribArray(VA_POS);
-    glVertexAttribPointer(VA_POS,
-                          2,
-                          GL_FLOAT,
-                          GL_FALSE,
-                          sizeof(Vertex),
-                          (void*) offsetof(Vertex, pos));
-
-    glEnableVertexAttribArray(VA_UV);
-    glVertexAttribPointer(VA_UV,
-                          2,
-                          GL_FLOAT,
-                          GL_FALSE,
-                          sizeof(Vertex),
-                          (void*) offsetof(Vertex, uv));
-
-    glEnableVertexAttribArray(VA_COLOR);
-    glVertexAttribPointer(VA_COLOR,
-                          4,
-                          GL_FLOAT,
-                          GL_FALSE,
-                          sizeof(Vertex),
-                          (void*) offsetof(Vertex, color));
-
-    vertex_buf_push_quad(v2f(-1.0f, -1.0f), v2f(1.0f, 1.0f), (V4f){0});
-    vertex_buf_sync();
-
-    reload_shaders();
+    renderer_push_quad(&global_renderer, v2f(-1.0f, -1.0f), v2f(1.0f, 1.0f), (V4f) {
+        0
+    });
+    renderer_sync(&global_renderer);
+    renderer_reload_shaders(&global_renderer);
 
     glfwSetKeyCallback(window, key_callback);
     glfwSetFramebufferSizeCallback(window, window_size_callback);
@@ -400,16 +411,16 @@ int main()
     while (!glfwWindowShouldClose(window)) {
         glClear(GL_COLOR_BUFFER_BIT);
 
-        if (!program_failed) {
+        if (!global_renderer.program_failed) {
             static_assert(COUNT_UNIFORMS == 3, "Update the uniform sync");
             int width, height;
             glfwGetWindowSize(window, &width, &height);
-            glUniform2f(main_uniforms[RESOLUTION_UNIFORM], width, height);
-            glUniform1f(main_uniforms[TIME_UNIFORM], time);
+            glUniform2f(global_renderer.uniforms[RESOLUTION_UNIFORM], width, height);
+            glUniform1f(global_renderer.uniforms[TIME_UNIFORM], time);
             double xpos, ypos;
             glfwGetCursorPos(window, &xpos, &ypos);
-            glUniform2f(main_uniforms[MOUSE_UNIFORM], xpos, height - ypos);
-            glDrawArraysInstanced(GL_TRIANGLES, 0, vertex_buf_sz, 1);
+            glUniform2f(global_renderer.uniforms[MOUSE_UNIFORM], xpos, height - ypos);
+            glDrawArraysInstanced(GL_TRIANGLES, 0, global_renderer.vertex_buf_sz, 1);
         }
 
         glfwSwapBuffers(window);
