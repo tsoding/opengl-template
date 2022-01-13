@@ -9,6 +9,9 @@
 
 #include <GLFW/glfw3.h>
 
+#define LA_IMPLEMENTATION
+#include "la.h"
+
 #define DEFAULT_SCREEN_WIDTH 1600
 #define DEFAULT_SCREEN_HEIGHT 900
 #define MANUAL_TIME_STEP 0.1
@@ -141,12 +144,76 @@ static const char *uniform_names[COUNT_UNIFORMS] = {
     [MOUSE_UNIFORM] = "mouse",
 };
 
+typedef enum {
+    VA_POS = 0,
+    VA_UV,
+    VA_COLOR,
+    COUNT_VAS,
+} Vertex_Attrib;
+
+typedef struct {
+    V2f pos;
+    V2f uv;
+    V4f color;
+} Vertex;
+
 // Global variables (fragile people with CS degree look away)
 bool program_failed = false;
 double time = 0.0;
 GLuint main_program = 0;
 GLint main_uniforms[COUNT_UNIFORMS];
 bool pause = false;
+
+#define VERTEX_BUF_CAP (8 * 1024)
+Vertex vertex_buf[VERTEX_BUF_CAP];
+size_t vertex_buf_sz = 0;
+
+void vertex_buf_push(V2f pos, V2f uv, V4f color)
+{
+    assert(vertex_buf_sz < VERTEX_BUF_CAP);
+    vertex_buf[vertex_buf_sz].pos = pos;
+    vertex_buf[vertex_buf_sz].uv = uv;
+    vertex_buf[vertex_buf_sz].color = color;
+    vertex_buf_sz += 1;
+}
+
+void vertex_buf_push_quad(V2f p1, V2f p2, V4f color)
+{
+    V2f a = p1;
+    V2f b = v2f(p2.x, p1.y);
+    V2f c = v2f(p1.x, p2.y);
+    V2f d = p2;
+
+    vertex_buf_push(a, v2f(0.0f, 0.0f), color);
+    vertex_buf_push(b, v2f(1.0f, 0.0f), color);
+    vertex_buf_push(c, v2f(0.0f, 1.0f), color);
+
+    vertex_buf_push(b, v2f(1.0f, 0.0f), color);
+    vertex_buf_push(c, v2f(0.0f, 1.0f), color);
+    vertex_buf_push(d, v2f(1.0f, 1.0f), color);
+}
+
+void vertex_buf_push_checker_board(int grid_size)
+{
+    float cell_width = 2.0f/grid_size;
+    float cell_height = 2.0f/grid_size;
+    for (int y = 0; y < grid_size; ++y) {
+        for (int x = 0; x < grid_size; ++x) {
+            vertex_buf_push_quad(
+                v2f(-1.0f + x*cell_width, -1.0f + y*cell_height),
+                v2f(-1.0f + (x + 1)*cell_width, -1.0f + (y + 1)*cell_height),
+                (x + y)%2 == 0 ? v4f(1.0f, 0.0f, 0.0f, 1.0f) : v4f(0.0f, 0.0f, 0.0f, 1.0f));
+        }
+    }
+}
+
+void vertex_buf_sync(void)
+{
+    glBufferSubData(GL_ARRAY_BUFFER,
+                    0,
+                    sizeof(Vertex) * vertex_buf_sz,
+                    vertex_buf);
+}
 
 bool load_shader_program(const char *vertex_file_path,
                          const char *fragment_file_path,
@@ -291,6 +358,38 @@ int main()
     glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
 
+    GLuint vbo;
+    glGenBuffers(1, &vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertex_buf), vertex_buf, GL_DYNAMIC_DRAW);
+
+    glEnableVertexAttribArray(VA_POS);
+    glVertexAttribPointer(VA_POS,
+                          2,
+                          GL_FLOAT,
+                          GL_FALSE,
+                          sizeof(Vertex),
+                          (void*) offsetof(Vertex, pos));
+
+    glEnableVertexAttribArray(VA_UV);
+    glVertexAttribPointer(VA_UV,
+                          2,
+                          GL_FLOAT,
+                          GL_FALSE,
+                          sizeof(Vertex),
+                          (void*) offsetof(Vertex, uv));
+
+    glEnableVertexAttribArray(VA_COLOR);
+    glVertexAttribPointer(VA_COLOR,
+                          4,
+                          GL_FLOAT,
+                          GL_FALSE,
+                          sizeof(Vertex),
+                          (void*) offsetof(Vertex, color));
+
+    vertex_buf_push_quad(v2f(-1.0f, -1.0f), v2f(1.0f, 1.0f), (V4f){0});
+    vertex_buf_sync();
+
     reload_shaders();
 
     glfwSetKeyCallback(window, key_callback);
@@ -310,7 +409,7 @@ int main()
             double xpos, ypos;
             glfwGetCursorPos(window, &xpos, &ypos);
             glUniform2f(main_uniforms[MOUSE_UNIFORM], xpos, height - ypos);
-            glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, 1);
+            glDrawArraysInstanced(GL_TRIANGLES, 0, vertex_buf_sz, 1);
         }
 
         glfwSwapBuffers(window);
