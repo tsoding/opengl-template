@@ -407,7 +407,7 @@ int main()
     glfwSetFramebufferSizeCallback(window, window_size_callback);
 
     time = glfwGetTime();
-    double prev_time;
+    double prev_time = 0.0;
     while (!glfwWindowShouldClose(window)) {
         glClear(GL_COLOR_BUFFER_BIT);
 
@@ -415,12 +415,12 @@ int main()
             static_assert(COUNT_UNIFORMS == 3, "Update the uniform sync");
             int width, height;
             glfwGetWindowSize(window, &width, &height);
-            glUniform2f(global_renderer.uniforms[RESOLUTION_UNIFORM], width, height);
-            glUniform1f(global_renderer.uniforms[TIME_UNIFORM], time);
+            glUniform2f(global_renderer.uniforms[RESOLUTION_UNIFORM], (GLfloat) width, (GLfloat) height);
+            glUniform1f(global_renderer.uniforms[TIME_UNIFORM], (GLfloat) time);
             double xpos, ypos;
             glfwGetCursorPos(window, &xpos, &ypos);
-            glUniform2f(global_renderer.uniforms[MOUSE_UNIFORM], xpos, height - ypos);
-            glDrawArraysInstanced(GL_TRIANGLES, 0, global_renderer.vertex_buf_sz, 1);
+            glUniform2f(global_renderer.uniforms[MOUSE_UNIFORM], (GLfloat) xpos, (GLfloat) (height - ypos));
+            glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) global_renderer.vertex_buf_sz, 1);
         }
 
         glfwSwapBuffers(window);
