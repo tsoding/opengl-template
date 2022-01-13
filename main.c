@@ -250,6 +250,10 @@ int main()
         exit(1);
     }
 
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+
     GLFWwindow * const window = glfwCreateWindow(
                                     DEFAULT_SCREEN_WIDTH,
                                     DEFAULT_SCREEN_HEIGHT,
@@ -261,6 +265,10 @@ int main()
         glfwTerminate();
         exit(1);
     }
+
+    int gl_ver_major = glfwGetWindowAttrib(window, GLFW_CONTEXT_VERSION_MAJOR);
+    int gl_ver_minor = glfwGetWindowAttrib(window, GLFW_CONTEXT_VERSION_MINOR);
+    printf("OpenGL %d.%d\n", gl_ver_major, gl_ver_minor);
 
     glfwMakeContextCurrent(window);
 
@@ -278,6 +286,10 @@ int main()
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    GLuint vao;
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
 
     reload_shaders();
 
