@@ -1,3 +1,7 @@
+#ifdef _WIN32
+#include <GL/glcorearb.h>
+#endif
+
 static PFNGLCREATESHADERPROC glCreateShader = NULL;
 static PFNGLSHADERSOURCEPROC glShaderSource = NULL;
 static PFNGLCOMPILESHADERPROC glCompileShader = NULL;

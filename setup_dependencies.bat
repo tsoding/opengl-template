@@ -4,7 +4,12 @@ curl -fsSL -o glfw-3.3.2.bin.WIN64.zip https://github.com/glfw/glfw/releases/dow
 tar -xf glfw-3.3.2.bin.WIN64.zip
 mkdir Dependencies\GLFW\lib\
 move glfw-3.3.2.bin.WIN64\lib-vc2019\glfw3.lib Dependencies\GLFW\lib\glfw3.lib
-mkdir Dependencies\GLFW\include\GLFW
+mkdir Dependencies\GLFW\include\GLFW\
 move glfw-3.3.2.bin.WIN64\include\GLFW\glfw3.h Dependencies\GLFW\include\GLFW\glfw3.h
-del glfw-3.3.2.bin.WIN64.zip
+del  glfw-3.3.2.bin.WIN64.zip
 rmdir /s /q glfw-3.3.2.bin.WIN64
+
+mkdir         Dependencies\GL\include\GL\
+curl -fsSL -o Dependencies\GL\include\GL\glcorearb.h     https://www.khronos.org/registry/OpenGL/api/GL/glcorearb.h
+mkdir         Dependencies\KHR\include\KHR\
+curl -fsSL -o Dependencies\KHR\include\KHR\khrplatform.h https://www.khronos.org/registry/EGL/api/KHR/khrplatform.h
