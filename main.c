@@ -15,35 +15,43 @@
 
 #include "glextloader.c"
 
-char *slurp_file(const char *file_path)
+char *slurp_file_into_malloced_cstr(const char *file_path)
 {
-#define SLURP_FILE_PANIC \
-    do { \
-        fprintf(stderr, "Could not read file `%s`: %s\n", file_path, strerror(errno)); \
-        exit(1); \
-    } while (0)
+    FILE *f = NULL;
+    char *buffer = NULL;
 
-    FILE *f = fopen(file_path, "r");
-    if (f == NULL) SLURP_FILE_PANIC;
-    if (fseek(f, 0, SEEK_END) < 0) SLURP_FILE_PANIC;
+    f = fopen(file_path, "r");
+    if (f == NULL) goto fail;
+    if (fseek(f, 0, SEEK_END) < 0) goto fail;
 
     long size = ftell(f);
-    if (size < 0) SLURP_FILE_PANIC;
+    if (size < 0) goto fail;
 
-    char *buffer = malloc(size + 1);
-    if (buffer == NULL) SLURP_FILE_PANIC;
+    buffer = malloc(size + 1);
+    if (buffer == NULL) goto fail;
 
-    if (fseek(f, 0, SEEK_SET) < 0) SLURP_FILE_PANIC;
+    if (fseek(f, 0, SEEK_SET) < 0) goto fail;
 
     fread(buffer, 1, size, f);
-    if (ferror(f) < 0) SLURP_FILE_PANIC;
+    if (ferror(f)) goto fail;
 
     buffer[size] = '\0';
 
-    if (fclose(f) < 0) SLURP_FILE_PANIC;
-
+    if (f) {
+        fclose(f);
+        errno = 0;
+    }
     return buffer;
-#undef SLURP_FILE_PANIC
+fail:
+    if (f) {
+        int saved_errno = errno;
+        fclose(f);
+        errno = saved_errno;
+    }
+    if (buffer) {
+        free(buffer);
+    }
+    return NULL;
 }
 
 const char *shader_type_as_cstr(GLuint shader)
@@ -81,7 +89,12 @@ bool compile_shader_source(const GLchar *source, GLenum shader_type, GLuint *sha
 
 bool compile_shader_file(const char *file_path, GLenum shader_type, GLuint *shader)
 {
-    char *source = slurp_file(file_path);
+    char *source = slurp_file_into_malloced_cstr(file_path);
+    if (source == NULL) {
+        fprintf(stderr, "ERROR: failed to read file `%s`: %s\n", file_path, strerror(errno));
+        errno = 0;
+        return false;
+    }
     bool ok = compile_shader_source(source, shader_type, shader);
     if (!ok) {
         fprintf(stderr, "ERROR: failed to compile `%s` shader file\n", file_path);
