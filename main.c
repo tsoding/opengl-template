@@ -25,6 +25,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
 char *slurp_file_into_malloced_cstr(const char *file_path)
 {
     FILE *f = NULL;
@@ -374,7 +377,6 @@ void renderer_reload_shaders(Renderer *r)
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-    (void) window;
     (void) scancode;
     (void) action;
     (void) mods;
@@ -384,6 +386,22 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
             reload_render_conf("render.conf");
             renderer_reload_textures(&global_renderer);
             renderer_reload_shaders(&global_renderer);
+        } else if (key == GLFW_KEY_F6) {
+#define SCREENSHOT_PNG_PATH "screenshot.png"
+            printf("Saving the screenshot at %s\n", SCREENSHOT_PNG_PATH);
+            int width, height;
+            glfwGetWindowSize(window, &width, &height);
+            void *pixels = malloc(4 * width * height);
+            if (pixels == NULL) {
+                fprintf(stderr, "ERROR: could not allocate memory for pixels to make a screenshot: %s\n",
+                        strerror(errno));
+                return;
+            }
+            glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+            if (!stbi_write_png(SCREENSHOT_PNG_PATH, width, height, 4, pixels, width * 4)) {
+                fprintf(stderr, "ERROR: could not save %s: %s\n", SCREENSHOT_PNG_PATH, strerror(errno));
+            }
+            free(pixels);
         } else if (key == GLFW_KEY_SPACE) {
             pause = !pause;
         } else if (key == GLFW_KEY_Q) {

@@ -2,3 +2,5 @@ main
 Dependencies
 *.exe
 *.obj
+*.swp
+screenshot.png
