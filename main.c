@@ -254,7 +254,7 @@ void renderer_reload_shaders(Renderer *r)
     glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
 
     {
-        if (!load_shader_program("shaders/main.vert", "shaders/box-muller.frag", &r->program)) {
+        if (!load_shader_program("shaders/main.vert", "shaders/main.frag", &r->program)) {
             return;
         }
 
