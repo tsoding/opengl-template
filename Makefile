@@ -1,6 +1,7 @@
 PKGS=glfw3 gl
-CFLAGS=-Wall -Wextra -ggdb -I./include/
+CFLAGS=-Wall -Wextra -ggdb -I./include/ `pkg-config --cflags $(PKGS)`
+LIBS=`pkg-config --libs $(PKGS)` -lm
 
 main: main.c
-	$(CC) $(CFLAGS) `pkg-config --cflags $(PKGS)` -o main main.c `pkg-config --libs $(PKGS)` -lm
+	$(CC) $(CFLAGS) -o main main.c $(LIBS)
 
