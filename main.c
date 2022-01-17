@@ -19,6 +19,9 @@
 
 #include "glextloader.c"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 char *slurp_file_into_malloced_cstr(const char *file_path)
 {
     FILE *f = NULL;
@@ -351,7 +354,7 @@ void renderer_init(Renderer *r)
                           (void*) offsetof(Vertex, color));
 }
 
-int main()
+int main(void)
 {
     if (!glfwInit()) {
         fprintf(stderr, "ERROR: could not initialize GLFW\n");
@@ -395,8 +398,35 @@ int main()
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    renderer_init(&global_renderer);
+    const char *texture_filename = "./assets/tsodinFlushed.png";
+    int texture_width, texture_height;
+    unsigned char *texture_pixels = stbi_load(texture_filename, &texture_width, &texture_height, NULL, 4);
+    if (texture_pixels == NULL) {
+        fprintf(stderr, "ERROR: could not load image %s: %s\n",
+                texture_filename, strerror(errno));
+        exit(1);
+    }
 
+    GLuint texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+
+    glTexImage2D(GL_TEXTURE_2D,
+                 0,
+                 GL_RGBA,
+                 texture_width,
+                 texture_height,
+                 0,
+                 GL_RGBA,
+                 GL_UNSIGNED_BYTE,
+                 texture_pixels);
+
+    renderer_init(&global_renderer);
 
     renderer_push_quad(&global_renderer, v2f(-1.0f, -1.0f), v2f(1.0f, 1.0f), (V4f) {
         0
