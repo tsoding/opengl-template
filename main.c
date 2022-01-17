@@ -13,6 +13,9 @@
 #define LA_IMPLEMENTATION
 #include "la.h"
 
+#define SV_IMPLEMENTATION
+#include "sv.h"
+
 #define DEFAULT_SCREEN_WIDTH 1600
 #define DEFAULT_SCREEN_HEIGHT 900
 #define MANUAL_TIME_STEP 0.1
@@ -170,6 +173,7 @@ typedef struct {
     GLint uniforms[COUNT_UNIFORMS];
     Vertex vertex_buf[VERTEX_BUF_CAP];
     size_t vertex_buf_sz;
+    GLuint texture;
 } Renderer;
 
 // Global variables (fragile people with CS degree look away)
@@ -246,6 +250,103 @@ bool load_shader_program(const char *vertex_file_path,
     return true;
 }
 
+static char *render_conf = NULL;
+const char *vert_path = NULL;
+const char *frag_path = NULL;
+const char *texture_path = NULL;
+
+void reload_render_conf(const char *render_conf_path)
+{
+    if (render_conf) free(render_conf);
+
+    render_conf = slurp_file_into_malloced_cstr(render_conf_path);
+    if (render_conf == NULL) {
+        fprintf(stderr, "ERROR: could not load %s: %s\n", render_conf_path, strerror(errno));
+        exit(1);
+    }
+
+    String_View content = sv_from_cstr(render_conf);
+
+    vert_path = NULL;
+    frag_path = NULL;
+    texture_path = NULL;
+    for (int row = 0; content.count > 0; row++) {
+        String_View line = sv_chop_by_delim(&content, '\n');
+        const char *line_start = line.data;
+        line = sv_trim_left(line);
+
+        if (line.count > 0 && line.data[0] != '#') {
+            String_View key = sv_trim(sv_chop_by_delim(&line, '='));
+            String_View value = sv_trim_left(line);
+
+            ((char*)value.data)[value.count] = '\0';
+            // ^^^SAFETY NOTES: this is needed so we can use `value` as a NULL-terminated C-string.
+            // This should not cause any problems because the original string `render_conf`
+            // that we are processing the `value` from is mutable, NULL-terminated and we are splitting
+            // it by newlines which garantees that there is always a character after 
+            // the end of `value`.
+            //
+            // Let's consider an example where `render_conf` is equal to this:
+            //
+            // ```
+            // key = value\n
+            // key = value\n
+            // key = value\0
+            // ```
+            //
+            // There is always something after `value`. It's either `\n` or `\0`. With all of these 
+            // invariats in place writing to `value.data[value.count]` should be safe.
+
+            if (sv_eq(key, SV("vert"))) {
+                vert_path = value.data;
+                printf("Vertex Path: %s\n", vert_path);
+            } else if (sv_eq(key, SV("frag"))) {
+                frag_path = value.data;
+                printf("Fragment Path: %s\n", frag_path);
+            } else if (sv_eq(key, SV("texture"))) {
+                texture_path = value.data;
+                printf("Texture Path: %s\n", texture_path);
+            } else {
+                printf("%s:%d:%ld: ERROR: unsupported key `"SV_Fmt"`\n",
+                       render_conf_path, row, key.data - line_start, 
+                       SV_Arg(key));
+            }
+        }
+    }
+}
+
+void renderer_reload_textures(Renderer *r)
+{
+    int texture_width, texture_height;
+    unsigned char *texture_pixels = stbi_load(texture_path, &texture_width, &texture_height, NULL, 4);
+    if (texture_pixels == NULL) {
+        fprintf(stderr, "ERROR: could not load image %s: %s\n",
+                texture_path, strerror(errno));
+        return;
+    }
+
+    glDeleteTextures(1, &r->texture);
+    glGenTextures(1, &r->texture);
+    glBindTexture(GL_TEXTURE_2D, r->texture);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+
+    glTexImage2D(GL_TEXTURE_2D,
+                 0,
+                 GL_RGBA,
+                 texture_width,
+                 texture_height,
+                 0,
+                 GL_RGBA,
+                 GL_UNSIGNED_BYTE,
+                 texture_pixels);
+
+    stbi_image_free(texture_pixels);
+}
+
 void renderer_reload_shaders(Renderer *r)
 {
     glDeleteProgram(r->program);
@@ -254,7 +355,7 @@ void renderer_reload_shaders(Renderer *r)
     glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
 
     {
-        if (!load_shader_program("shaders/main.vert", "shaders/main.frag", &r->program)) {
+        if (!load_shader_program(vert_path, frag_path, &r->program)) {
             return;
         }
 
@@ -280,6 +381,8 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 
     if (action == GLFW_PRESS) {
         if (key == GLFW_KEY_F5) {
+            reload_render_conf("render.conf");
+            renderer_reload_textures(&global_renderer);
             renderer_reload_shaders(&global_renderer);
         } else if (key == GLFW_KEY_SPACE) {
             pause = !pause;
@@ -322,6 +425,7 @@ void MessageCallback(GLenum source,
 
 void renderer_init(Renderer *r)
 {
+
     glGenVertexArrays(1, &r->vao);
     glBindVertexArray(r->vao);
 
@@ -356,6 +460,8 @@ void renderer_init(Renderer *r)
 
 int main(void)
 {
+    reload_render_conf("render.conf");
+
     if (!glfwInit()) {
         fprintf(stderr, "ERROR: could not initialize GLFW\n");
         exit(1);
@@ -398,33 +504,6 @@ int main(void)
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    const char *texture_filename = "./assets/tsodinFlushed.png";
-    int texture_width, texture_height;
-    unsigned char *texture_pixels = stbi_load(texture_filename, &texture_width, &texture_height, NULL, 4);
-    if (texture_pixels == NULL) {
-        fprintf(stderr, "ERROR: could not load image %s: %s\n",
-                texture_filename, strerror(errno));
-        exit(1);
-    }
-
-    GLuint texture;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-
-    glTexImage2D(GL_TEXTURE_2D,
-                 0,
-                 GL_RGBA,
-                 texture_width,
-                 texture_height,
-                 0,
-                 GL_RGBA,
-                 GL_UNSIGNED_BYTE,
-                 texture_pixels);
 
     renderer_init(&global_renderer);
 
@@ -432,6 +511,7 @@ int main(void)
         0
     });
     renderer_sync(&global_renderer);
+    renderer_reload_textures(&global_renderer);
     renderer_reload_shaders(&global_renderer);
 
     glfwSetKeyCallback(window, key_callback);
