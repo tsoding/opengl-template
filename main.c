@@ -286,7 +286,7 @@ void reload_render_conf(const char *render_conf_path)
             // ^^^SAFETY NOTES: this is needed so we can use `value` as a NULL-terminated C-string.
             // This should not cause any problems because the original string `render_conf`
             // that we are processing the `value` from is mutable, NULL-terminated and we are splitting
-            // it by newlines which garantees that there is always a character after 
+            // it by newlines which garantees that there is always a character after
             // the end of `value`.
             //
             // Let's consider an example where `render_conf` is equal to this:
@@ -297,7 +297,7 @@ void reload_render_conf(const char *render_conf_path)
             // key = value\0
             // ```
             //
-            // There is always something after `value`. It's either `\n` or `\0`. With all of these 
+            // There is always something after `value`. It's either `\n` or `\0`. With all of these
             // invariats in place writing to `value.data[value.count]` should be safe.
 
             if (sv_eq(key, SV("vert"))) {
@@ -311,7 +311,7 @@ void reload_render_conf(const char *render_conf_path)
                 printf("Texture Path: %s\n", texture_path);
             } else {
                 printf("%s:%d:%ld: ERROR: unsupported key `"SV_Fmt"`\n",
-                       render_conf_path, row, key.data - line_start, 
+                       render_conf_path, row, key.data - line_start,
                        SV_Arg(key));
             }
         }
@@ -476,6 +476,13 @@ void renderer_init(Renderer *r)
                           (void*) offsetof(Vertex, color));
 }
 
+void renderer_clear(Renderer *r)
+{
+    r->vertex_buf_sz = 0;
+}
+
+#define COLOR_BLACK_V4F ((V4f){0.0f, 0.0f, 0.0f, 1.0f})
+
 int main(void)
 {
     reload_render_conf("render.conf");
@@ -525,10 +532,6 @@ int main(void)
 
     renderer_init(&global_renderer);
 
-    renderer_push_quad(&global_renderer, v2f(-1.0f, -1.0f), v2f(1.0f, 1.0f), (V4f) {
-        0
-    });
-    renderer_sync(&global_renderer);
     renderer_reload_textures(&global_renderer);
     renderer_reload_shaders(&global_renderer);
 
@@ -540,17 +543,28 @@ int main(void)
     while (!glfwWindowShouldClose(window)) {
         glClear(GL_COLOR_BUFFER_BIT);
 
+        int width, height;
+        glfwGetWindowSize(window, &width, &height);
+        double xpos, ypos;
+        glfwGetCursorPos(window, &xpos, &ypos);
+
         if (!global_renderer.program_failed) {
             static_assert(COUNT_UNIFORMS == 3, "Update the uniform sync");
-            int width, height;
-            glfwGetWindowSize(window, &width, &height);
             glUniform2f(global_renderer.uniforms[RESOLUTION_UNIFORM], (GLfloat) width, (GLfloat) height);
             glUniform1f(global_renderer.uniforms[TIME_UNIFORM], (GLfloat) time);
-            double xpos, ypos;
-            glfwGetCursorPos(window, &xpos, &ypos);
             glUniform2f(global_renderer.uniforms[MOUSE_UNIFORM], (GLfloat) xpos, (GLfloat) (height - ypos));
+
+            renderer_clear(&global_renderer);
+            renderer_push_quad(
+                &global_renderer,
+                v2f(width * -0.5f, height * -0.5f),
+                v2f(width * 0.5f, height * 0.5f),
+                COLOR_BLACK_V4F);
+            renderer_sync(&global_renderer);
+
             glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) global_renderer.vertex_buf_sz, 1);
         }
+
 
         glfwSwapBuffers(window);
         glfwPollEvents();
