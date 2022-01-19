@@ -545,6 +545,7 @@ int main(void)
 
     time = glfwGetTime();
     double prev_time = 0.0;
+    double delta_time = 0.0f;
     while (!glfwWindowShouldClose(window)) {
         glClear(GL_COLOR_BUFFER_BIT);
 
@@ -572,8 +573,9 @@ int main(void)
         glfwSwapBuffers(window);
         glfwPollEvents();
         double cur_time = glfwGetTime();
+        delta_time = cur_time - prev_time;
         if (!pause) {
-            time += cur_time - prev_time;
+            time += delta_time;
         }
         prev_time = cur_time;
     }
