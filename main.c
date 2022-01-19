@@ -169,9 +169,9 @@ typedef struct {
 
 #define VERTEX_BUF_CAP (8 * 1024)
 typedef struct {
+    bool reload_failed;
     GLuint vao;
     GLuint vbo;
-    bool program_failed;
     GLuint program;
     GLint uniforms[COUNT_UNIFORMS];
     Vertex vertex_buf[VERTEX_BUF_CAP];
@@ -354,7 +354,7 @@ void renderer_reload_shaders(Renderer *r)
 {
     glDeleteProgram(r->program);
 
-    r->program_failed = true;
+    r->reload_failed = true;
     glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
 
     {
@@ -369,7 +369,7 @@ void renderer_reload_shaders(Renderer *r)
         }
     }
 
-    r->program_failed = false;
+    r->reload_failed = false;
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
     printf("Successfully Reload the Shaders\n");
@@ -548,7 +548,7 @@ int main(void)
         double xpos, ypos;
         glfwGetCursorPos(window, &xpos, &ypos);
 
-        if (!global_renderer.program_failed) {
+        if (!global_renderer.reload_failed) {
             static_assert(COUNT_UNIFORMS == 3, "Update the uniform sync");
             glUniform2f(global_renderer.uniforms[RESOLUTION_UNIFORM], (GLfloat) width, (GLfloat) height);
             glUniform1f(global_renderer.uniforms[TIME_UNIFORM], (GLfloat) time);
