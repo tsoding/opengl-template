@@ -217,6 +217,17 @@ void r_sync_buffers(Renderer *r)
                     r->vertex_buf);
 }
 
+void r_sync_uniforms(Renderer *r,
+                     GLfloat resolution_width, GLfloat resolution_height,
+                     GLfloat time,
+                     GLfloat mouse_x, GLfloat mouse_y)
+{
+    static_assert(COUNT_UNIFORMS == 3, "Exhaustive uniform handling in ");
+    glUniform2f(r->uniforms[RESOLUTION_UNIFORM], resolution_width, resolution_height);
+    glUniform1f(r->uniforms[TIME_UNIFORM], time);
+    glUniform2f(r->uniforms[MOUSE_UNIFORM], mouse_x, mouse_y);
+}
+
 bool load_shader_program(const char *vertex_file_path,
                          const char *fragment_file_path,
                          GLuint *program)
@@ -537,10 +548,10 @@ int main(void)
         glfwGetCursorPos(window, &xpos, &ypos);
 
         if (!global_renderer.reload_failed) {
-            static_assert(COUNT_UNIFORMS == 3, "Update the uniform sync");
-            glUniform2f(global_renderer.uniforms[RESOLUTION_UNIFORM], (GLfloat) width, (GLfloat) height);
-            glUniform1f(global_renderer.uniforms[TIME_UNIFORM], (GLfloat) time);
-            glUniform2f(global_renderer.uniforms[MOUSE_UNIFORM], (GLfloat) xpos, (GLfloat) (height - ypos));
+            r_sync_uniforms(&global_renderer,
+                            width, height,
+                            time,
+                            xpos, height - ypos);
 
             r_clear(&global_renderer);
             r_quad_pp(
