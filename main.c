@@ -184,7 +184,7 @@ static double time = 0.0;
 static bool pause = false;
 static Renderer global_renderer = {0};
 
-void renderer_push_vertex(Renderer *r, V2f pos, V2f uv, V4f color)
+void r_vertex(Renderer *r, V2f pos, V2f uv, V4f color)
 {
     assert(r->vertex_buf_sz < VERTEX_BUF_CAP);
     r->vertex_buf[r->vertex_buf_sz].pos = pos;
@@ -193,38 +193,23 @@ void renderer_push_vertex(Renderer *r, V2f pos, V2f uv, V4f color)
     r->vertex_buf_sz += 1;
 }
 
-void renderer_push_quad(Renderer *r, V2f p1, V2f p2, V4f color)
+void r_quad_pp(Renderer *r, V2f p1, V2f p2, V4f color)
 {
     V2f a = p1;
     V2f b = v2f(p2.x, p1.y);
     V2f c = v2f(p1.x, p2.y);
     V2f d = p2;
 
-    renderer_push_vertex(r, a, v2f(0.0f, 0.0f), color);
-    renderer_push_vertex(r, b, v2f(1.0f, 0.0f), color);
-    renderer_push_vertex(r, c, v2f(0.0f, 1.0f), color);
+    r_vertex(r, a, v2f(0.0f, 0.0f), color);
+    r_vertex(r, b, v2f(1.0f, 0.0f), color);
+    r_vertex(r, c, v2f(0.0f, 1.0f), color);
 
-    renderer_push_vertex(r, b, v2f(1.0f, 0.0f), color);
-    renderer_push_vertex(r, c, v2f(0.0f, 1.0f), color);
-    renderer_push_vertex(r, d, v2f(1.0f, 1.0f), color);
+    r_vertex(r, b, v2f(1.0f, 0.0f), color);
+    r_vertex(r, c, v2f(0.0f, 1.0f), color);
+    r_vertex(r, d, v2f(1.0f, 1.0f), color);
 }
 
-void renderer_push_checker_board(Renderer *r, int grid_size)
-{
-    float cell_width = 2.0f/grid_size;
-    float cell_height = 2.0f/grid_size;
-    for (int y = 0; y < grid_size; ++y) {
-        for (int x = 0; x < grid_size; ++x) {
-            renderer_push_quad(
-                r,
-                v2f(-1.0f + x*cell_width, -1.0f + y*cell_height),
-                v2f(-1.0f + (x + 1)*cell_width, -1.0f + (y + 1)*cell_height),
-                (x + y)%2 == 0 ? v4f(1.0f, 0.0f, 0.0f, 1.0f) : v4f(0.0f, 0.0f, 0.0f, 1.0f));
-        }
-    }
-}
-
-void renderer_sync(Renderer *r)
+void r_sync(Renderer *r)
 {
     glBufferSubData(GL_ARRAY_BUFFER,
                     0,
@@ -318,7 +303,7 @@ void reload_render_conf(const char *render_conf_path)
     }
 }
 
-void renderer_reload_textures(Renderer *r)
+void r_reload_textures(Renderer *r)
 {
     int texture_width, texture_height;
     unsigned char *texture_pixels = stbi_load(texture_path, &texture_width, &texture_height, NULL, 4);
@@ -350,7 +335,7 @@ void renderer_reload_textures(Renderer *r)
     stbi_image_free(texture_pixels);
 }
 
-void renderer_reload_shaders(Renderer *r)
+void r_reload_shaders(Renderer *r)
 {
     glDeleteProgram(r->program);
 
@@ -384,8 +369,8 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     if (action == GLFW_PRESS) {
         if (key == GLFW_KEY_F5) {
             reload_render_conf("render.conf");
-            renderer_reload_textures(&global_renderer);
-            renderer_reload_shaders(&global_renderer);
+            r_reload_textures(&global_renderer);
+            r_reload_shaders(&global_renderer);
         } else if (key == GLFW_KEY_F6) {
 #define SCREENSHOT_PNG_PATH "screenshot.png"
             printf("Saving the screenshot at %s\n", SCREENSHOT_PNG_PATH);
@@ -441,7 +426,7 @@ void MessageCallback(GLenum source,
             type, severity, message);
 }
 
-void renderer_init(Renderer *r)
+void r_init(Renderer *r)
 {
 
     glGenVertexArrays(1, &r->vao);
@@ -476,7 +461,7 @@ void renderer_init(Renderer *r)
                           (void*) offsetof(Vertex, color));
 }
 
-void renderer_clear(Renderer *r)
+void r_clear(Renderer *r)
 {
     r->vertex_buf_sz = 0;
 }
@@ -530,10 +515,10 @@ int main(void)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 
-    renderer_init(&global_renderer);
+    r_init(&global_renderer);
 
-    renderer_reload_textures(&global_renderer);
-    renderer_reload_shaders(&global_renderer);
+    r_reload_textures(&global_renderer);
+    r_reload_shaders(&global_renderer);
 
     glfwSetKeyCallback(window, key_callback);
     glfwSetFramebufferSizeCallback(window, window_size_callback);
@@ -554,13 +539,13 @@ int main(void)
             glUniform1f(global_renderer.uniforms[TIME_UNIFORM], (GLfloat) time);
             glUniform2f(global_renderer.uniforms[MOUSE_UNIFORM], (GLfloat) xpos, (GLfloat) (height - ypos));
 
-            renderer_clear(&global_renderer);
-            renderer_push_quad(
+            r_clear(&global_renderer);
+            r_quad_pp(
                 &global_renderer,
                 v2f(width * -0.5f, height * -0.5f),
                 v2f(width * 0.5f, height * 0.5f),
                 COLOR_BLACK_V4F);
-            renderer_sync(&global_renderer);
+            r_sync(&global_renderer);
 
             glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) global_renderer.vertex_buf_sz, 1);
         }
