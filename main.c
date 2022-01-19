@@ -303,14 +303,14 @@ void reload_render_conf(const char *render_conf_path)
     }
 }
 
-void r_reload_textures(Renderer *r)
+bool r_reload_textures(Renderer *r)
 {
     int texture_width, texture_height;
     unsigned char *texture_pixels = stbi_load(texture_path, &texture_width, &texture_height, NULL, 4);
     if (texture_pixels == NULL) {
         fprintf(stderr, "ERROR: could not load image %s: %s\n",
                 texture_path, strerror(errno));
-        return;
+        return false;
     }
 
     glDeleteTextures(1, &r->texture);
@@ -333,31 +333,37 @@ void r_reload_textures(Renderer *r)
                  texture_pixels);
 
     stbi_image_free(texture_pixels);
+
+    printf("Successfully reloaded textures\n");
+    return true;
 }
 
-void r_reload_shaders(Renderer *r)
+bool r_reload_shaders(Renderer *r)
 {
     glDeleteProgram(r->program);
 
+    if (!load_shader_program(vert_path, frag_path, &r->program)) return false;
+
+    glUseProgram(r->program);
+
+    for (Uniform index = 0; index < COUNT_UNIFORMS; ++index) {
+        r->uniforms[index] = glGetUniformLocation(r->program, uniform_names[index]);
+    }
+
+    printf("Successfully reloaded the Shaders\n");
+    return true;
+}
+
+void r_reload(Renderer *r)
+{
     r->reload_failed = true;
     glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
 
-    {
-        if (!load_shader_program(vert_path, frag_path, &r->program)) {
-            return;
-        }
-
-        glUseProgram(r->program);
-
-        for (Uniform index = 0; index < COUNT_UNIFORMS; ++index) {
-            r->uniforms[index] = glGetUniformLocation(r->program, uniform_names[index]);
-        }
-    }
+    if (!r_reload_shaders(r)) return;
+    if (!r_reload_textures(r)) return;
 
     r->reload_failed = false;
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-
-    printf("Successfully Reload the Shaders\n");
 }
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -369,8 +375,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     if (action == GLFW_PRESS) {
         if (key == GLFW_KEY_F5) {
             reload_render_conf("render.conf");
-            r_reload_textures(&global_renderer);
-            r_reload_shaders(&global_renderer);
+            r_reload(&global_renderer);
         } else if (key == GLFW_KEY_F6) {
 #define SCREENSHOT_PNG_PATH "screenshot.png"
             printf("Saving the screenshot at %s\n", SCREENSHOT_PNG_PATH);
@@ -516,9 +521,7 @@ int main(void)
 
 
     r_init(&global_renderer);
-
-    r_reload_textures(&global_renderer);
-    r_reload_shaders(&global_renderer);
+    r_reload(&global_renderer);
 
     glfwSetKeyCallback(window, key_callback);
     glfwSetFramebufferSizeCallback(window, window_size_callback);
