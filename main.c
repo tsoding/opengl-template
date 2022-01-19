@@ -552,14 +552,12 @@ int main(void)
         glfwGetWindowSize(window, &width, &height);
         double xpos, ypos;
         glfwGetCursorPos(window, &xpos, &ypos);
+        xpos = xpos - width * 0.5f;
+        ypos = (height - ypos) - height * 0.5f;
 
         if (!global_renderer.reload_failed) {
-            r_sync_uniforms(r,
-                            width, height,
-                            time,
-                            xpos, height - ypos);
-
             r_clear(r);
+            r_sync_uniforms(r, width, height, time, xpos, ypos);
             r_quad_cr(
                 r,
                 v2ff(0.0f),
