@@ -535,9 +535,10 @@ int main(void)
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    Renderer *r = &global_renderer;
 
-    r_init(&global_renderer);
-    r_reload(&global_renderer);
+    r_init(r);
+    r_reload(r);
 
     glfwSetKeyCallback(window, key_callback);
     glfwSetFramebufferSizeCallback(window, window_size_callback);
@@ -553,18 +554,18 @@ int main(void)
         glfwGetCursorPos(window, &xpos, &ypos);
 
         if (!global_renderer.reload_failed) {
-            r_sync_uniforms(&global_renderer,
+            r_sync_uniforms(r,
                             width, height,
                             time,
                             xpos, height - ypos);
 
-            r_clear(&global_renderer);
+            r_clear(r);
             r_quad_cr(
-                &global_renderer,
+                r,
                 v2ff(0.0f),
                 v2f_mul(v2f(width, height), v2ff(0.5f)),
                 COLOR_BLACK_V4F);
-            r_sync_buffers(&global_renderer);
+            r_sync_buffers(r);
 
             glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) global_renderer.vertex_buf_sz, 1);
         }
