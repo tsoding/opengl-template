@@ -209,6 +209,11 @@ void r_quad_pp(Renderer *r, V2f p1, V2f p2, V4f color)
     r_vertex(r, d, v2f(1.0f, 1.0f), color);
 }
 
+void r_quad_cr(Renderer *r, V2f center, V2f radius, V4f color)
+{
+    r_quad_pp(r, v2f_sub(center, radius), v2f_sum(center, radius), color);
+}
+
 void r_sync_buffers(Renderer *r)
 {
     glBufferSubData(GL_ARRAY_BUFFER,
@@ -554,10 +559,10 @@ int main(void)
                             xpos, height - ypos);
 
             r_clear(&global_renderer);
-            r_quad_pp(
+            r_quad_cr(
                 &global_renderer,
-                v2f(width * -0.5f, height * -0.5f),
-                v2f(width * 0.5f, height * 0.5f),
+                v2ff(0.0f),
+                v2f_mul(v2f(width, height), v2ff(0.5f)),
                 COLOR_BLACK_V4F);
             r_sync_buffers(&global_renderer);
 
