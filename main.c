@@ -386,6 +386,7 @@ bool r_reload(Renderer *r)
 #define COLOR_BLACK_V4F ((V4f){0.0f, 0.0f, 0.0f, 1.0f})
 #define COLOR_RED_V4F ((V4f){1.0f, 0.0f, 0.0f, 1.0f})
 #define COLOR_GREEN_V4F ((V4f){0.0f, 1.0f, 0.0f, 1.0f})
+#define COLOR_BLUE_V4F ((V4f){0.0f, 0.0f, 1.0f, 1.0f})
 
 float t = 0.0f;
 float dt = 0.0f;
@@ -423,6 +424,9 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
                 fprintf(stderr, "ERROR: could not save %s: %s\n", SCREENSHOT_PNG_PATH, strerror(errno));
             }
             free(pixels);
+            color = COLOR_BLUE_V4F;
+            dt = -2.0f;
+            t = 1.0f;
         } else if (key == GLFW_KEY_SPACE) {
             pause = !pause;
         } else if (key == GLFW_KEY_Q) {
@@ -595,6 +599,7 @@ int main(void)
     GLuint framebuffer_tex_uniform = glGetUniformLocation(framebuffer_program, "tex");
     GLuint framebuffer_color_uniform = glGetUniformLocation(framebuffer_program, "color");
     GLuint framebuffer_t_uniform = glGetUniformLocation(framebuffer_program, "t");
+    GLuint framebuffer_resolution_uniform = glGetUniformLocation(framebuffer_program, "resolution");
 
     glUniform1i(framebuffer_tex_uniform, 1);
     glUniform4f(framebuffer_color_uniform, 1.0, 0.0, 0.0, 1.0);
@@ -649,6 +654,7 @@ int main(void)
         }
         glUniform1f(framebuffer_t_uniform, t);
         glUniform4f(framebuffer_color_uniform, color.x, color.y, color.z, color.w);
+        glUniform2f(framebuffer_resolution_uniform, width, height);
         glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
         glfwSwapBuffers(window);
