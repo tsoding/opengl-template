@@ -331,6 +331,7 @@ bool r_reload_textures(Renderer *r)
 
     glDeleteTextures(1, &r->texture);
     glGenTextures(1, &r->texture);
+    glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, r->texture);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -370,17 +371,25 @@ bool r_reload_shaders(Renderer *r)
     return true;
 }
 
-void r_reload(Renderer *r)
+bool r_reload(Renderer *r)
 {
     r->reload_failed = true;
-    glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
 
-    if (!r_reload_shaders(r)) return;
-    if (!r_reload_textures(r)) return;
+    if (!r_reload_shaders(r)) return false;
+    if (!r_reload_textures(r)) return false;
 
     r->reload_failed = false;
-    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+
+    return true;
 }
+
+#define COLOR_BLACK_V4F ((V4f){0.0f, 0.0f, 0.0f, 1.0f})
+#define COLOR_RED_V4F ((V4f){1.0f, 0.0f, 0.0f, 1.0f})
+#define COLOR_GREEN_V4F ((V4f){0.0f, 1.0f, 0.0f, 1.0f})
+
+float t = 0.0f;
+float dt = 0.0f;
+V4f color = {0};
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
@@ -391,7 +400,13 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     if (action == GLFW_PRESS) {
         if (key == GLFW_KEY_F5) {
             reload_render_conf("render.conf");
-            r_reload(&global_renderer);
+            dt = -2.0f;
+            t = 1.0f;
+            if (r_reload(&global_renderer)) {
+                color = COLOR_GREEN_V4F;
+            } else {
+                color = COLOR_RED_V4F;
+            }
         } else if (key == GLFW_KEY_F6) {
 #define SCREENSHOT_PNG_PATH "screenshot.png"
             printf("Saving the screenshot at %s\n", SCREENSHOT_PNG_PATH);
@@ -423,6 +438,8 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         }
     }
 }
+
+GLuint framebuffer;
 
 void window_size_callback(GLFWwindow* window, int width, int height)
 {
@@ -487,7 +504,7 @@ void r_clear(Renderer *r)
     r->vertex_buf_sz = 0;
 }
 
-#define COLOR_BLACK_V4F ((V4f){0.0f, 0.0f, 0.0f, 1.0f})
+
 
 int main(void)
 {
@@ -535,6 +552,55 @@ int main(void)
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    GLuint framebuffer_texture;
+    glGenTextures(1, &framebuffer_texture);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, framebuffer_texture);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_RGBA,
+        DEFAULT_SCREEN_WIDTH,
+        DEFAULT_SCREEN_HEIGHT,
+        0,
+        GL_RGBA,
+        GL_UNSIGNED_BYTE,
+        NULL);
+
+    glGenFramebuffers(1, &framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, framebuffer_texture, 0);
+
+    GLenum draw_buffers = GL_COLOR_ATTACHMENT0;
+    glDrawBuffers(1, &draw_buffers);
+
+    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        fprintf(stderr, "ERROR: Could not complete the framebuffer\n");
+        exit(1);
+    }
+
+    GLuint framebuffer_program;
+    if (!load_shader_program("./shaders/debug.vert", "./shaders/debug.frag", &framebuffer_program)) {
+        exit(1);
+    }
+    glUseProgram(framebuffer_program);
+
+    GLuint framebuffer_tex_uniform = glGetUniformLocation(framebuffer_program, "tex");
+    GLuint framebuffer_color_uniform = glGetUniformLocation(framebuffer_program, "color");
+    GLuint framebuffer_t_uniform = glGetUniformLocation(framebuffer_program, "t");
+
+    glUniform1i(framebuffer_tex_uniform, 1);
+    glUniform4f(framebuffer_color_uniform, 1.0, 0.0, 0.0, 1.0);
+
+    printf("Successfully created the debug framebuffer\n");
+
     Renderer *r = &global_renderer;
 
     r_init(r);
@@ -547,6 +613,8 @@ int main(void)
     double prev_time = 0.0;
     double delta_time = 0.0f;
     while (!glfwWindowShouldClose(window)) {
+        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+
         glClear(GL_COLOR_BUFFER_BIT);
 
         int width, height;
@@ -556,7 +624,8 @@ int main(void)
         xpos = xpos - width * 0.5f;
         ypos = (height - ypos) - height * 0.5f;
 
-        if (!global_renderer.reload_failed) {
+        // if (!r->reload_failed) {
+            glUseProgram(r->program);
             r_clear(r);
             r_sync_uniforms(r, width, height, time, xpos, ypos);
             r_quad_cr(
@@ -566,9 +635,21 @@ int main(void)
                 COLOR_BLACK_V4F);
             r_sync_buffers(r);
 
-            glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) global_renderer.vertex_buf_sz, 1);
-        }
+            glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) r->vertex_buf_sz, 1);
+        // }
 
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        glClear(GL_COLOR_BUFFER_BIT);
+        glUseProgram(framebuffer_program);
+        t += dt * delta_time;
+        if (t <= 0.0f) {
+            t = 0.0f;
+            dt = 0.0f;
+        }
+        glUniform1f(framebuffer_t_uniform, t);
+        glUniform4f(framebuffer_color_uniform, color.x, color.y, color.z, color.w);
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
