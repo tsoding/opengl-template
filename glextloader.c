@@ -24,6 +24,18 @@ static PFNGLVERTEXATTRIBPOINTERPROC glVertexAttribPointer = NULL;
 static PFNGLUNIFORM1FPROC glUniform1f = NULL;
 static PFNGLBUFFERSUBDATAPROC glBufferSubData = NULL;
 static PFNGLDRAWARRAYSINSTANCEDPROC glDrawArraysInstanced = NULL;
+static PFNGLGENFRAMEBUFFERSPROC glGenFramebuffers = NULL;
+static PFNGLBINDFRAMEBUFFERPROC glBindFramebuffer = NULL;
+static PFNGLFRAMEBUFFERTEXTURE2DPROC glFramebufferTexture2D = NULL;
+static PFNGLCHECKFRAMEBUFFERSTATUSPROC glCheckFramebufferStatus = NULL;
+static PFNGLUNIFORM1IPROC glUniform1i = NULL;
+static PFNGLDRAWBUFFERSPROC glDrawBuffers = NULL;
+static PFNGLUNIFORM4FPROC glUniform4f = NULL;
+// TODO: there is something fishy with Windows gl.h header
+// Let's try to ship our own gl.h just like glext.h
+#ifdef _WIN32
+static PFNGLACTIVETEXTUREPROC glActiveTexture = NULL;
+#endif // _WIN32
 
 static void load_gl_extensions(void)
 {
@@ -53,6 +65,16 @@ static void load_gl_extensions(void)
     glVertexAttribPointer     = (PFNGLVERTEXATTRIBPOINTERPROC) glfwGetProcAddress("glVertexAttribPointer");
     glUniform1f               = (PFNGLUNIFORM1FPROC) glfwGetProcAddress("glUniform1f");
     glBufferSubData           = (PFNGLBUFFERSUBDATAPROC) glfwGetProcAddress("glBufferSubData");
+    glGenFramebuffers         = (PFNGLGENFRAMEBUFFERSPROC) glfwGetProcAddress("glGenFramebuffers");
+    glBindFramebuffer         = (PFNGLBINDFRAMEBUFFERPROC) glfwGetProcAddress("glBindFramebuffer");
+    glFramebufferTexture2D    = (PFNGLFRAMEBUFFERTEXTURE2DPROC) glfwGetProcAddress("glFramebufferTexture2D");
+    glCheckFramebufferStatus  = (PFNGLCHECKFRAMEBUFFERSTATUSPROC) glfwGetProcAddress("glCheckFramebufferStatus");
+    glUniform1i               = (PFNGLUNIFORM1IPROC) glfwGetProcAddress("glUniform1i");
+    glDrawBuffers             = (PFNGLDRAWBUFFERSPROC) glfwGetProcAddress("glDrawBuffers");
+    glUniform4f               = (PFNGLUNIFORM4FPROC) glfwGetProcAddress("glUniform4f");
+#ifdef _WIN32
+    glActiveTexture           = (PFNGLACTIVETEXTUREPROC) glfwGetProcAddress("glActiveTexture");
+#endif // _WIN32
 
     if (glfwExtensionSupported("GL_ARB_debug_output")) {
         fprintf(stderr, "INFO: ARB_debug_output is supported\n");
