@@ -20,6 +20,11 @@
 #define DEFAULT_SCREEN_HEIGHT 900
 #define MANUAL_TIME_STEP 0.1
 
+#define COLOR_BLACK_V4F ((V4f){0.0f, 0.0f, 0.0f, 1.0f})
+#define COLOR_RED_V4F ((V4f){1.0f, 0.0f, 0.0f, 1.0f})
+#define COLOR_GREEN_V4F ((V4f){0.0f, 1.0f, 0.0f, 1.0f})
+#define COLOR_BLUE_V4F ((V4f){0.0f, 0.0f, 1.0f, 1.0f})
+
 #include "glextloader.c"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -383,14 +388,34 @@ bool r_reload(Renderer *r)
     return true;
 }
 
-#define COLOR_BLACK_V4F ((V4f){0.0f, 0.0f, 0.0f, 1.0f})
-#define COLOR_RED_V4F ((V4f){1.0f, 0.0f, 0.0f, 1.0f})
-#define COLOR_GREEN_V4F ((V4f){0.0f, 1.0f, 0.0f, 1.0f})
-#define COLOR_BLUE_V4F ((V4f){0.0f, 0.0f, 1.0f, 1.0f})
+typedef struct {
+    float t;
+    float dt;
+    V4f color;
+} Flash;
 
-float t = 0.0f;
-float dt = 0.0f;
-V4f color = {0};
+static Flash global_flash = {0};
+
+#define FLASH_SPEED 2.0f
+#define FLASH_RED_V4F COLOR_RED_V4F
+#define FLASH_GREEN_V4F COLOR_GREEN_V4F
+#define FLASH_BLUE_V4F COLOR_BLUE_V4F
+
+void flash_bang(Flash *flash, V4f color)
+{
+    flash->t = 1.0f;
+    flash->dt = -FLASH_SPEED;
+    flash->color = color;
+}
+
+void flash_update(Flash *flash, float delta_time)
+{
+    flash->t += flash->dt * delta_time;
+    if (flash->t <= 0.0f) {
+        flash->t = 0.0f;
+        flash->dt = 0.0f;
+    }
+}
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
@@ -401,12 +426,10 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     if (action == GLFW_PRESS) {
         if (key == GLFW_KEY_F5) {
             reload_render_conf("render.conf");
-            dt = -2.0f;
-            t = 1.0f;
             if (r_reload(&global_renderer)) {
-                color = COLOR_GREEN_V4F;
+                flash_bang(&global_flash, FLASH_GREEN_V4F);
             } else {
-                color = COLOR_RED_V4F;
+                flash_bang(&global_flash, FLASH_RED_V4F);
             }
         } else if (key == GLFW_KEY_F6) {
 #define SCREENSHOT_PNG_PATH "screenshot.png"
@@ -424,9 +447,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
                 fprintf(stderr, "ERROR: could not save %s: %s\n", SCREENSHOT_PNG_PATH, strerror(errno));
             }
             free(pixels);
-            color = COLOR_BLUE_V4F;
-            dt = -2.0f;
-            t = 1.0f;
+            flash_bang(&global_flash, FLASH_BLUE_V4F);
         } else if (key == GLFW_KEY_SPACE) {
             pause = !pause;
         } else if (key == GLFW_KEY_Q) {
@@ -521,8 +542,6 @@ void r_clear(Renderer *r)
     r->vertex_buf_sz = 0;
 }
 
-
-
 int main(void)
 {
     reload_render_conf("render.conf");
@@ -604,7 +623,7 @@ int main(void)
     }
 
     GLuint framebuffer_program;
-    if (!load_shader_program("./shaders/debug.vert", "./shaders/debug.frag", &framebuffer_program)) {
+    if (!load_shader_program("./shaders/flash.vert", "./shaders/flash.frag", &framebuffer_program)) {
         exit(1);
     }
     glUseProgram(framebuffer_program);
@@ -612,7 +631,6 @@ int main(void)
     GLuint framebuffer_tex_uniform = glGetUniformLocation(framebuffer_program, "tex");
     GLuint framebuffer_color_uniform = glGetUniformLocation(framebuffer_program, "color");
     GLuint framebuffer_t_uniform = glGetUniformLocation(framebuffer_program, "t");
-    GLuint framebuffer_resolution_uniform = glGetUniformLocation(framebuffer_program, "resolution");
 
     glUniform1i(framebuffer_tex_uniform, 1);
     glUniform4f(framebuffer_color_uniform, 1.0, 0.0, 0.0, 1.0);
@@ -660,14 +678,9 @@ int main(void)
 
         glClear(GL_COLOR_BUFFER_BIT);
         glUseProgram(framebuffer_program);
-        t += dt * delta_time;
-        if (t <= 0.0f) {
-            t = 0.0f;
-            dt = 0.0f;
-        }
-        glUniform1f(framebuffer_t_uniform, t);
-        glUniform4f(framebuffer_color_uniform, color.x, color.y, color.z, color.w);
-        glUniform2f(framebuffer_resolution_uniform, width, height);
+        flash_update(&global_flash, delta_time);
+        glUniform1f(framebuffer_t_uniform, global_flash.t);
+        glUniform4f(framebuffer_color_uniform, global_flash.color.x, global_flash.color.y, global_flash.color.z, global_flash.color.w);
         glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
         glfwSwapBuffers(window);
