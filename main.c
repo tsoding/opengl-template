@@ -444,11 +444,24 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 }
 
 GLuint framebuffer;
+GLuint framebuffer_texture;
 
 void window_size_callback(GLFWwindow* window, int width, int height)
 {
     (void) window;
     glViewport(0, 0, width, height);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, framebuffer_texture);
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_RGBA,
+        width,
+        height,
+        0,
+        GL_RGBA,
+        GL_UNSIGNED_BYTE,
+        NULL);
 }
 
 void MessageCallback(GLenum source,
@@ -556,7 +569,7 @@ int main(void)
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    GLuint framebuffer_texture;
+
     glGenTextures(1, &framebuffer_texture);
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, framebuffer_texture);
