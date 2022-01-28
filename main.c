@@ -392,6 +392,13 @@ typedef struct {
     float t;
     float dt;
     V4f color;
+
+    GLuint framebuffer;
+    GLuint texture;
+    GLuint program;
+    GLuint tex_uniform;
+    GLuint color_uniform;
+    GLuint t_uniform;
 } Flash;
 
 static Flash global_flash = {0};
@@ -400,6 +407,56 @@ static Flash global_flash = {0};
 #define FLASH_RED_V4F COLOR_RED_V4F
 #define FLASH_GREEN_V4F COLOR_GREEN_V4F
 #define FLASH_BLUE_V4F COLOR_BLUE_V4F
+
+void flash_init(Flash *flash)
+{
+    glGenTextures(1, &flash->texture);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, flash->texture);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+
+    glTexImage2D(
+        GL_TEXTURE_2D,
+        0,
+        GL_RGBA,
+        DEFAULT_SCREEN_WIDTH,
+        DEFAULT_SCREEN_HEIGHT,
+        0,
+        GL_RGBA,
+        GL_UNSIGNED_BYTE,
+        NULL);
+
+    glGenFramebuffers(1, &flash->framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, flash->framebuffer);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, flash->texture, 0);
+
+    GLenum draw_buffers = GL_COLOR_ATTACHMENT0;
+    glDrawBuffers(1, &draw_buffers);
+
+    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        fprintf(stderr, "ERROR: Could not complete the framebuffer\n");
+        exit(1);
+    }
+
+    if (!load_shader_program("./shaders/flash.vert", "./shaders/flash.frag", &flash->program)) {
+        exit(1);
+    }
+    glUseProgram(flash->program);
+
+    flash->tex_uniform = glGetUniformLocation(flash->program, "tex");
+    flash->color_uniform = glGetUniformLocation(flash->program, "color");
+    flash->t_uniform = glGetUniformLocation(flash->program, "t");
+
+    glUniform1i(flash->tex_uniform, 1);
+    glUniform4f(flash->color_uniform, 1.0, 0.0, 0.0, 1.0);
+
+    printf("Successfully created the debug framebuffer\n");
+}
 
 void flash_bang(Flash *flash, V4f color)
 {
@@ -415,6 +472,12 @@ void flash_update(Flash *flash, float delta_time)
         flash->t = 0.0f;
         flash->dt = 0.0f;
     }
+}
+
+void flash_sync_uniforms(Flash *f)
+{
+    glUniform1f(f->t_uniform, f->t);
+    glUniform4f(f->color_uniform, f->color.x, f->color.y, f->color.z, f->color.w);
 }
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -464,15 +527,12 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     }
 }
 
-GLuint framebuffer;
-GLuint framebuffer_texture;
-
 void window_size_callback(GLFWwindow* window, int width, int height)
 {
     (void) window;
     glViewport(0, 0, width, height);
     glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, framebuffer_texture);
+    glBindTexture(GL_TEXTURE_2D, global_flash.texture);
     glTexImage2D(
         GL_TEXTURE_2D,
         0,
@@ -588,54 +648,7 @@ int main(void)
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-
-    glGenTextures(1, &framebuffer_texture);
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, framebuffer_texture);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-
-    glTexImage2D(
-        GL_TEXTURE_2D,
-        0,
-        GL_RGBA,
-        DEFAULT_SCREEN_WIDTH,
-        DEFAULT_SCREEN_HEIGHT,
-        0,
-        GL_RGBA,
-        GL_UNSIGNED_BYTE,
-        NULL);
-
-    glGenFramebuffers(1, &framebuffer);
-    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, framebuffer_texture, 0);
-
-    GLenum draw_buffers = GL_COLOR_ATTACHMENT0;
-    glDrawBuffers(1, &draw_buffers);
-
-    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-    if (status != GL_FRAMEBUFFER_COMPLETE) {
-        fprintf(stderr, "ERROR: Could not complete the framebuffer\n");
-        exit(1);
-    }
-
-    GLuint framebuffer_program;
-    if (!load_shader_program("./shaders/flash.vert", "./shaders/flash.frag", &framebuffer_program)) {
-        exit(1);
-    }
-    glUseProgram(framebuffer_program);
-
-    GLuint framebuffer_tex_uniform = glGetUniformLocation(framebuffer_program, "tex");
-    GLuint framebuffer_color_uniform = glGetUniformLocation(framebuffer_program, "color");
-    GLuint framebuffer_t_uniform = glGetUniformLocation(framebuffer_program, "t");
-
-    glUniform1i(framebuffer_tex_uniform, 1);
-    glUniform4f(framebuffer_color_uniform, 1.0, 0.0, 0.0, 1.0);
-
-    printf("Successfully created the debug framebuffer\n");
+    flash_init(&global_flash);
 
     Renderer *r = &global_renderer;
 
@@ -649,10 +662,6 @@ int main(void)
     double prev_time = 0.0;
     double delta_time = 0.0f;
     while (!glfwWindowShouldClose(window)) {
-        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-
-        glClear(GL_COLOR_BUFFER_BIT);
-
         int width, height;
         glfwGetWindowSize(window, &width, &height);
         double xpos, ypos;
@@ -660,7 +669,9 @@ int main(void)
         xpos = xpos - width * 0.5f;
         ypos = (height - ypos) - height * 0.5f;
 
-        // if (!r->reload_failed) {
+        glBindFramebuffer(GL_FRAMEBUFFER, global_flash.framebuffer);
+        {
+            glClear(GL_COLOR_BUFFER_BIT);
             glUseProgram(r->program);
             r_clear(r);
             r_sync_uniforms(r, width, height, time, xpos, ypos);
@@ -672,16 +683,16 @@ int main(void)
             r_sync_buffers(r);
 
             glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) r->vertex_buf_sz, 1);
-        // }
+        }
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-        glClear(GL_COLOR_BUFFER_BIT);
-        glUseProgram(framebuffer_program);
-        flash_update(&global_flash, delta_time);
-        glUniform1f(framebuffer_t_uniform, global_flash.t);
-        glUniform4f(framebuffer_color_uniform, global_flash.color.x, global_flash.color.y, global_flash.color.z, global_flash.color.w);
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        {
+            glClear(GL_COLOR_BUFFER_BIT);
+            glUseProgram(global_flash.program);
+            flash_update(&global_flash, delta_time);
+            flash_sync_uniforms(&global_flash);
+            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+        }
 
         glfwSwapBuffers(window);
         glfwPollEvents();
