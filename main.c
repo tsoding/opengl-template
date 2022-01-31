@@ -162,6 +162,13 @@ static const char *uniform_names[COUNT_UNIFORMS] = {
 };
 
 typedef enum {
+    PROGRAM_SCENE = 0,
+    PROGRAM_POST0,
+    PROGRAM_POST1,
+    COUNT_PROGRAMS
+} Program;
+
+typedef enum {
     VA_POS = 0,
     VA_UV,
     VA_COLOR,
@@ -179,18 +186,17 @@ typedef struct {
     bool reload_failed;
     GLuint vao;
     GLuint vbo;
-    GLuint program;
-    GLint uniforms[COUNT_UNIFORMS];
-    Vertex vertex_buf[VERTEX_BUF_CAP];
+    GLuint programs[COUNT_PROGRAMS];
+    GLint uniforms[COUNT_PROGRAMS][COUNT_UNIFORMS];
     size_t vertex_buf_sz;
-    GLuint texture;
+    Vertex vertex_buf[VERTEX_BUF_CAP];
 } Renderer;
 
 // Global variables (fragile people with CS degree look away)
 static double time = 0.0;
 static bool pause = false;
+static GLuint user_texture = 0;
 static Renderer global_renderer = {0};
-static Renderer ripple_renderer = {0};
 
 void r_vertex(Renderer *r, V2f pos, V2f uv, V4f color)
 {
@@ -231,16 +237,17 @@ void r_sync_buffers(Renderer *r)
 }
 
 void r_sync_uniforms(Renderer *r,
+                     GLuint program,
                      GLfloat resolution_width, GLfloat resolution_height,
                      GLfloat time,
                      GLfloat mouse_x, GLfloat mouse_y,
                      GLint tex_unit)
 {
     static_assert(COUNT_UNIFORMS == 4, "Exhaustive uniform handling in ");
-    glUniform2f(r->uniforms[RESOLUTION_UNIFORM], resolution_width, resolution_height);
-    glUniform1f(r->uniforms[TIME_UNIFORM], time);
-    glUniform2f(r->uniforms[MOUSE_UNIFORM], mouse_x, mouse_y);
-    glUniform1i(r->uniforms[TEX_UNIFORM], tex_unit);
+    glUniform2f(r->uniforms[program][RESOLUTION_UNIFORM], resolution_width, resolution_height);
+    glUniform1f(r->uniforms[program][TIME_UNIFORM], time);
+    glUniform2f(r->uniforms[program][MOUSE_UNIFORM], mouse_x, mouse_y);
+    glUniform1i(r->uniforms[program][TEX_UNIFORM], tex_unit);
 }
 
 bool load_shader_program(const char *vertex_file_path,
@@ -274,8 +281,8 @@ typedef struct {
 Object objects[OBJECTS_CAP];
 size_t objects_count = 0;
 
-static const char *vert_path = NULL;
-static const char *frag_path = NULL;
+static const char *vert_path[COUNT_PROGRAMS] = {0};
+static const char *frag_path[COUNT_PROGRAMS] = {0};
 static const char *texture_path = NULL;
 static float follow_scale = 1.0f;
 static float object_size = 100.0f;
@@ -314,8 +321,10 @@ void reload_render_conf(const char *render_conf_path)
 
     String_View content = sv_from_cstr(render_conf);
 
-    vert_path = NULL;
-    frag_path = NULL;
+    for (Program p = 0; p < COUNT_PROGRAMS; ++p) {
+        vert_path[p] = NULL;
+        frag_path[p] = NULL;
+    }
     texture_path = NULL;
     for (int row = 0; content.count > 0; row++) {
         String_View line = sv_chop_by_delim(&content, '\n');
@@ -344,15 +353,21 @@ void reload_render_conf(const char *render_conf_path)
             // There is always something after `value`. It's either `\n` or `\0`. With all of these
             // invariats in place writing to `value.data[value.count]` should be safe.
 
-            if (sv_eq(key, SV("vert"))) {
-                vert_path = value.data;
-                printf("Vertex Path: %s\n", vert_path);
-            } else if (sv_eq(key, SV("frag"))) {
-                frag_path = value.data;
-                printf("Fragment Path: %s\n", frag_path);
+            static_assert(COUNT_PROGRAMS == 3, "Exhaustive handling of shader programs in config parsing");
+            if (sv_eq(key, SV("vert[SCENE]"))) {
+                vert_path[PROGRAM_SCENE] = value.data;
+            } else if (sv_eq(key, SV("frag[SCENE]"))) {
+                frag_path[PROGRAM_SCENE] = value.data;
+            } else if (sv_eq(key, SV("vert[POST0]"))) {
+                vert_path[PROGRAM_POST0] = value.data;
+            } else if (sv_eq(key, SV("frag[POST0]"))) {
+                frag_path[PROGRAM_POST0] = value.data;
+            } else if (sv_eq(key, SV("vert[POST1]"))) {
+                vert_path[PROGRAM_POST1] = value.data;
+            } else if (sv_eq(key, SV("frag[POST1]"))) {
+                frag_path[PROGRAM_POST1] = value.data;
             } else if (sv_eq(key, SV("texture"))) {
                 texture_path = value.data;
-                printf("Texture Path: %s\n", texture_path);
             } else if (sv_eq(key, SV("follow_scale"))) {
                 follow_scale = strtof(value.data, NULL);
             } else if (sv_eq(key, SV("object_size"))) {
@@ -372,12 +387,15 @@ void reload_render_conf(const char *render_conf_path)
                 printf("%s:%d:%ld: ERROR: unsupported key `"SV_Fmt"`\n",
                        render_conf_path, row, key.data - line_start,
                        SV_Arg(key));
+                continue;
             }
+
+            printf(SV_Fmt" = %s\n", SV_Arg(key), value.data);
         }
     }
 }
 
-bool r_reload_textures(Renderer *r)
+bool reload_user_textures(void)
 {
     int texture_width, texture_height;
     unsigned char *texture_pixels = stbi_load(texture_path, &texture_width, &texture_height, NULL, 4);
@@ -387,10 +405,10 @@ bool r_reload_textures(Renderer *r)
         return false;
     }
 
-    glDeleteTextures(1, &r->texture);
-    glGenTextures(1, &r->texture);
+    glDeleteTextures(1, &user_texture);
+    glGenTextures(1, &user_texture);
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, r->texture);
+    glBindTexture(GL_TEXTURE_2D, user_texture);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -413,60 +431,41 @@ bool r_reload_textures(Renderer *r)
     return true;
 }
 
-bool r_reload_shaders(Renderer *r, const char *vert_path, const char *frag_path)
+bool r_reload_shaders(Renderer *r)
 {
-    glDeleteProgram(r->program);
+    for (Program p = 0; p < COUNT_PROGRAMS; ++p) {
+        glDeleteProgram(r->programs[p]);
 
-    if (!load_shader_program(vert_path, frag_path, &r->program)) return false;
+        if (!load_shader_program(vert_path[p], frag_path[p], &r->programs[p])) return false;
 
-    glUseProgram(r->program);
+        glUseProgram(r->programs[p]);
 
-    for (Uniform index = 0; index < COUNT_UNIFORMS; ++index) {
-        r->uniforms[index] = glGetUniformLocation(r->program, uniform_names[index]);
+        for (Uniform index = 0; index < COUNT_UNIFORMS; ++index) {
+            r->uniforms[p][index] = glGetUniformLocation(r->programs[p], uniform_names[index]);
+        }
     }
 
     printf("Successfully reloaded the Shaders\n");
     return true;
 }
 
-bool r_reload(Renderer *r, const char *vert_path, const char *frag_path)
+bool r_reload(Renderer *r)
 {
     r->reload_failed = true;
-
-    if (!r_reload_shaders(r, vert_path, frag_path)) return false;
-    if (!r_reload_textures(r)) return false;
-
+    if (!r_reload_shaders(r)) return false;
     r->reload_failed = false;
 
     return true;
 }
 
-typedef struct {
-    float t;
-    float dt;
-    V4f color;
+static GLuint scene_framebuffer = {0};
+static GLuint scene_texture = 0;
 
-    GLuint framebuffer;
-    GLuint texture;
-    GLuint program;
-    GLuint tex_uniform;
-    GLuint color_uniform;
-    GLuint t_uniform;
-    GLuint time_uniform;
-} Flash;
-
-static Flash global_flash = {0};
-
-#define FLASH_SPEED 2.0f
-#define FLASH_RED_V4F COLOR_RED_V4F
-#define FLASH_GREEN_V4F COLOR_GREEN_V4F
-#define FLASH_BLUE_V4F COLOR_BLUE_V4F
-
-void flash_init(Flash *flash)
+void scene_framebuffer_init(void)
 {
-    glGenTextures(1, &flash->texture);
+    glGenTextures(1, &scene_texture);
     glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, flash->texture);
+    glBindTexture(GL_TEXTURE_2D, scene_texture);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -484,9 +483,9 @@ void flash_init(Flash *flash)
         GL_UNSIGNED_BYTE,
         NULL);
 
-    glGenFramebuffers(1, &flash->framebuffer);
-    glBindFramebuffer(GL_FRAMEBUFFER, flash->framebuffer);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, flash->texture, 0);
+    glGenFramebuffers(1, &scene_framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, scene_framebuffer);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, scene_texture, 0);
 
     GLenum draw_buffers = GL_COLOR_ATTACHMENT0;
     glDrawBuffers(1, &draw_buffers);
@@ -497,43 +496,7 @@ void flash_init(Flash *flash)
         exit(1);
     }
 
-    if (!load_shader_program("./shaders/flash.vert", "./shaders/flash.frag", &flash->program)) {
-        exit(1);
-    }
-    glUseProgram(flash->program);
-
-    flash->tex_uniform = glGetUniformLocation(flash->program, "tex");
-    flash->color_uniform = glGetUniformLocation(flash->program, "color");
-    flash->t_uniform = glGetUniformLocation(flash->program, "t");
-    flash->time_uniform = glGetUniformLocation(flash->program, "time");
-
-    glUniform1i(flash->tex_uniform, 1);
-    glUniform4f(flash->color_uniform, 1.0, 0.0, 0.0, 1.0);
-
     printf("Successfully created the debug framebuffer\n");
-}
-
-void flash_bang(Flash *flash, V4f color)
-{
-    flash->t = 1.0f;
-    flash->dt = -FLASH_SPEED;
-    flash->color = color;
-}
-
-void flash_update(Flash *flash, float delta_time)
-{
-    flash->t += flash->dt * delta_time;
-    if (flash->t <= 0.0f) {
-        flash->t = 0.0f;
-        flash->dt = 0.0f;
-    }
-}
-
-void flash_sync_uniforms(Flash *f)
-{
-    glUniform1f(f->t_uniform, f->t);
-    glUniform4f(f->color_uniform, f->color.x, f->color.y, f->color.z, f->color.w);
-    glUniform1f(f->time_uniform, time);
 }
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -545,12 +508,8 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     if (action == GLFW_PRESS) {
         if (key == GLFW_KEY_F5) {
             reload_render_conf("render.conf");
-            if (r_reload(&global_renderer, vert_path, frag_path) &&
-                    r_reload(&ripple_renderer, "shaders/ripple.vert", "shaders/ripple.frag")) {
-                flash_bang(&global_flash, FLASH_GREEN_V4F);
-            } else {
-                flash_bang(&global_flash, FLASH_RED_V4F);
-            }
+            reload_user_textures();
+            r_reload(&global_renderer);
         } else if (key == GLFW_KEY_F6) {
 #define SCREENSHOT_PNG_PATH "screenshot.png"
             printf("Saving the screenshot at %s\n", SCREENSHOT_PNG_PATH);
@@ -567,7 +526,6 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
                 fprintf(stderr, "ERROR: could not save %s: %s\n", SCREENSHOT_PNG_PATH, strerror(errno));
             }
             free(pixels);
-            flash_bang(&global_flash, FLASH_BLUE_V4F);
         } else if (key == GLFW_KEY_SPACE) {
             pause = !pause;
         } else if (key == GLFW_KEY_Q) {
@@ -589,7 +547,7 @@ void window_size_callback(GLFWwindow* window, int width, int height)
     (void) window;
     glViewport(0, 0, width, height);
     glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, global_flash.texture);
+    glBindTexture(GL_TEXTURE_2D, scene_texture);
     glTexImage2D(
         GL_TEXTURE_2D,
         0,
@@ -704,15 +662,14 @@ int main(void)
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    flash_init(&global_flash);
+    scene_framebuffer_init();
 
     Renderer *r = &global_renderer;
 
-    r_init(r);
-    r_reload(r, vert_path, frag_path);
+    reload_user_textures();
 
-    r_init(&ripple_renderer);
-    r_reload(&ripple_renderer, "shaders/ripple.vert", "shaders/ripple.frag");
+    r_init(r);
+    r_reload(r);
 
     glfwSetKeyCallback(window, key_callback);
     glfwSetFramebufferSizeCallback(window, window_size_callback);
@@ -728,45 +685,50 @@ int main(void)
         xpos = xpos - width * 0.5f;
         ypos = (height - ypos) - height * 0.5f;
 
-        glBindFramebuffer(GL_FRAMEBUFFER, global_flash.framebuffer);
-        {
-            glClear(GL_COLOR_BUFFER_BIT);
-            glBindVertexArray(r->vao);
-            glBindBuffer(GL_ARRAY_BUFFER, r->vbo);
-            glUseProgram(r->program);
-            r_clear(r);
-            r_sync_uniforms(r, width, height, time, xpos, ypos, 0);
-            for (size_t i = 0; i < objects_count; ++i) {
-                object_render(r, &objects[i]);
+        if (!r->reload_failed) {
+            static_assert(COUNT_PROGRAMS == 3, "Exhaustive handling of shader programs in the event loop");
+
+            glBindFramebuffer(GL_FRAMEBUFFER, scene_framebuffer);
+            {
+                glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+                glClear(GL_COLOR_BUFFER_BIT);
+                glUseProgram(r->programs[PROGRAM_SCENE]);
+                r_clear(r);
+                r_sync_uniforms(r, PROGRAM_SCENE, width, height, time, xpos, ypos, 0);
+                for (size_t i = 0; i < objects_count; ++i) {
+                    object_render(r, &objects[i]);
+                }
+                r_sync_buffers(r);
+
+                glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) r->vertex_buf_sz, 1);
             }
-            r_sync_buffers(r);
 
-            glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) r->vertex_buf_sz, 1);
-        }
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            {
+                glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+                glClear(GL_COLOR_BUFFER_BIT);
 
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+#if 0
+                glUseProgram(r->programs[PROGRAM_POST0]);
+                r_sync_uniforms(r, PROGRAM_POST0, width, height, time, xpos, ypos, 1);
+                glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+#endif
 
-        {
+                glUseProgram(r->programs[PROGRAM_POST1]);
+                r_clear(r);
+                r_sync_uniforms(r, PROGRAM_POST1, width, height, time, xpos, ypos, 1);
+                r_quad_cr(r, v2ff(0.0f), v2f(width * 0.5, height * 0.5), COLOR_BLACK_V4F);
+                r_sync_buffers(r);
+                glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) r->vertex_buf_sz, 1);
+            }
+        } else {
+            glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT);
-            glUseProgram(global_flash.program);
-            flash_update(&global_flash, delta_time);
-            flash_sync_uniforms(&global_flash);
-            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-
-            glBindVertexArray(ripple_renderer.vao);
-            glBindBuffer(GL_ARRAY_BUFFER, ripple_renderer.vbo);
-            glUseProgram(ripple_renderer.program);
-            r_clear(&ripple_renderer);
-            r_sync_uniforms(&ripple_renderer, width, height, time, xpos, ypos, 1);
-            r_quad_cr(&ripple_renderer, v2ff(0.0f), v2f(width * 0.5, height * 0.5), COLOR_BLACK_V4F);
-            r_sync_buffers(&ripple_renderer);
-
-            glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) ripple_renderer.vertex_buf_sz, 1);
         }
 
         if (objects_count > 0) {
-            float follow_x = sin(time * rotate_speed) * rotate_radius;
-            float follow_y = cos(time * rotate_speed) * rotate_radius;
+            float follow_x = xpos + sin(time * rotate_speed) * rotate_radius;
+            float follow_y = ypos + cos(time * rotate_speed) * rotate_radius;
 
             object_update(&objects[0], delta_time, follow_x, follow_y);
             for (size_t i = 1; i < objects_count; ++i) {
