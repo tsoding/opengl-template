@@ -149,14 +149,16 @@ typedef enum {
     RESOLUTION_UNIFORM = 0,
     TIME_UNIFORM,
     MOUSE_UNIFORM,
+    TEX_UNIFORM,
     COUNT_UNIFORMS
 } Uniform;
 
-static_assert(COUNT_UNIFORMS == 3, "Update list of uniform names");
+static_assert(COUNT_UNIFORMS == 4, "Update list of uniform names");
 static const char *uniform_names[COUNT_UNIFORMS] = {
     [RESOLUTION_UNIFORM] = "resolution",
     [TIME_UNIFORM] = "time",
     [MOUSE_UNIFORM] = "mouse",
+    [TEX_UNIFORM] = "tex",
 };
 
 typedef enum {
@@ -188,6 +190,7 @@ typedef struct {
 static double time = 0.0;
 static bool pause = false;
 static Renderer global_renderer = {0};
+static Renderer ripple_renderer = {0};
 
 void r_vertex(Renderer *r, V2f pos, V2f uv, V4f color)
 {
@@ -230,12 +233,14 @@ void r_sync_buffers(Renderer *r)
 void r_sync_uniforms(Renderer *r,
                      GLfloat resolution_width, GLfloat resolution_height,
                      GLfloat time,
-                     GLfloat mouse_x, GLfloat mouse_y)
+                     GLfloat mouse_x, GLfloat mouse_y,
+                     GLint tex_unit)
 {
-    static_assert(COUNT_UNIFORMS == 3, "Exhaustive uniform handling in ");
+    static_assert(COUNT_UNIFORMS == 4, "Exhaustive uniform handling in ");
     glUniform2f(r->uniforms[RESOLUTION_UNIFORM], resolution_width, resolution_height);
     glUniform1f(r->uniforms[TIME_UNIFORM], time);
     glUniform2f(r->uniforms[MOUSE_UNIFORM], mouse_x, mouse_y);
+    glUniform1i(r->uniforms[TEX_UNIFORM], tex_unit);
 }
 
 bool load_shader_program(const char *vertex_file_path,
@@ -260,9 +265,42 @@ bool load_shader_program(const char *vertex_file_path,
 }
 
 static char *render_conf = NULL;
-const char *vert_path = NULL;
-const char *frag_path = NULL;
-const char *texture_path = NULL;
+
+typedef struct {
+    float x, y, dx, dy;
+} Object;
+
+#define OBJECTS_CAP 1024
+Object objects[OBJECTS_CAP];
+size_t objects_count = 0;
+
+static const char *vert_path = NULL;
+static const char *frag_path = NULL;
+static const char *texture_path = NULL;
+static float follow_scale = 1.0f;
+static float object_size = 100.0f;
+static float rotate_radius = 500.0f;
+static float rotate_speed = 4.0f;
+
+void object_render(Renderer *r, Object *object)
+{
+    r_quad_cr(
+        r,
+        v2f(object->x, object->y),
+        v2ff(object_size),
+        COLOR_BLACK_V4F);
+}
+
+void object_update(Object *obj, float delta_time,
+                   float target_x, float target_y)
+{
+    if (!pause) {
+        obj->x += delta_time * obj->dx;
+        obj->y += delta_time * obj->dy;
+        obj->dx = (target_x - obj->x) * follow_scale;
+        obj->dy = (target_y - obj->y) * follow_scale;
+    }
+}
 
 void reload_render_conf(const char *render_conf_path)
 {
@@ -315,6 +353,21 @@ void reload_render_conf(const char *render_conf_path)
             } else if (sv_eq(key, SV("texture"))) {
                 texture_path = value.data;
                 printf("Texture Path: %s\n", texture_path);
+            } else if (sv_eq(key, SV("follow_scale"))) {
+                follow_scale = strtof(value.data, NULL);
+            } else if (sv_eq(key, SV("object_size"))) {
+                object_size = strtof(value.data, NULL);
+            } else if (sv_eq(key, SV("rotate_radius"))) {
+                rotate_radius = strtof(value.data, NULL);
+            } else if (sv_eq(key, SV("rotate_speed"))) {
+                rotate_speed = strtof(value.data, NULL);
+            } else if (sv_eq(key, SV("objects_count"))) {
+                objects_count = strtol(value.data, NULL, 10);
+                if (objects_count > OBJECTS_CAP) {
+                    printf("%s:%d:%ld: WARNING: objects_count overflow\n",
+                           render_conf_path, row, key.data - line_start);
+                    objects_count = OBJECTS_CAP;
+                }
             } else {
                 printf("%s:%d:%ld: ERROR: unsupported key `"SV_Fmt"`\n",
                        render_conf_path, row, key.data - line_start,
@@ -360,7 +413,7 @@ bool r_reload_textures(Renderer *r)
     return true;
 }
 
-bool r_reload_shaders(Renderer *r)
+bool r_reload_shaders(Renderer *r, const char *vert_path, const char *frag_path)
 {
     glDeleteProgram(r->program);
 
@@ -376,11 +429,11 @@ bool r_reload_shaders(Renderer *r)
     return true;
 }
 
-bool r_reload(Renderer *r)
+bool r_reload(Renderer *r, const char *vert_path, const char *frag_path)
 {
     r->reload_failed = true;
 
-    if (!r_reload_shaders(r)) return false;
+    if (!r_reload_shaders(r, vert_path, frag_path)) return false;
     if (!r_reload_textures(r)) return false;
 
     r->reload_failed = false;
@@ -399,6 +452,7 @@ typedef struct {
     GLuint tex_uniform;
     GLuint color_uniform;
     GLuint t_uniform;
+    GLuint time_uniform;
 } Flash;
 
 static Flash global_flash = {0};
@@ -451,6 +505,7 @@ void flash_init(Flash *flash)
     flash->tex_uniform = glGetUniformLocation(flash->program, "tex");
     flash->color_uniform = glGetUniformLocation(flash->program, "color");
     flash->t_uniform = glGetUniformLocation(flash->program, "t");
+    flash->time_uniform = glGetUniformLocation(flash->program, "time");
 
     glUniform1i(flash->tex_uniform, 1);
     glUniform4f(flash->color_uniform, 1.0, 0.0, 0.0, 1.0);
@@ -478,6 +533,7 @@ void flash_sync_uniforms(Flash *f)
 {
     glUniform1f(f->t_uniform, f->t);
     glUniform4f(f->color_uniform, f->color.x, f->color.y, f->color.z, f->color.w);
+    glUniform1f(f->time_uniform, time);
 }
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
@@ -489,7 +545,8 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     if (action == GLFW_PRESS) {
         if (key == GLFW_KEY_F5) {
             reload_render_conf("render.conf");
-            if (r_reload(&global_renderer)) {
+            if (r_reload(&global_renderer, vert_path, frag_path) &&
+                    r_reload(&ripple_renderer, "shaders/ripple.vert", "shaders/ripple.frag")) {
                 flash_bang(&global_flash, FLASH_GREEN_V4F);
             } else {
                 flash_bang(&global_flash, FLASH_RED_V4F);
@@ -564,7 +621,6 @@ void MessageCallback(GLenum source,
 
 void r_init(Renderer *r)
 {
-
     glGenVertexArrays(1, &r->vao);
     glBindVertexArray(r->vao);
 
@@ -653,7 +709,10 @@ int main(void)
     Renderer *r = &global_renderer;
 
     r_init(r);
-    r_reload(r);
+    r_reload(r, vert_path, frag_path);
+
+    r_init(&ripple_renderer);
+    r_reload(&ripple_renderer, "shaders/ripple.vert", "shaders/ripple.frag");
 
     glfwSetKeyCallback(window, key_callback);
     glfwSetFramebufferSizeCallback(window, window_size_callback);
@@ -672,26 +731,47 @@ int main(void)
         glBindFramebuffer(GL_FRAMEBUFFER, global_flash.framebuffer);
         {
             glClear(GL_COLOR_BUFFER_BIT);
+            glBindVertexArray(r->vao);
+            glBindBuffer(GL_ARRAY_BUFFER, r->vbo);
             glUseProgram(r->program);
             r_clear(r);
-            r_sync_uniforms(r, width, height, time, xpos, ypos);
-            r_quad_cr(
-                r,
-                v2ff(0.0f),
-                v2f_mul(v2f(width, height), v2ff(0.5f)),
-                COLOR_BLACK_V4F);
+            r_sync_uniforms(r, width, height, time, xpos, ypos, 0);
+            for (size_t i = 0; i < objects_count; ++i) {
+                object_render(r, &objects[i]);
+            }
             r_sync_buffers(r);
 
             glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) r->vertex_buf_sz, 1);
         }
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
         {
             glClear(GL_COLOR_BUFFER_BIT);
             glUseProgram(global_flash.program);
             flash_update(&global_flash, delta_time);
             flash_sync_uniforms(&global_flash);
             glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+            glBindVertexArray(ripple_renderer.vao);
+            glBindBuffer(GL_ARRAY_BUFFER, ripple_renderer.vbo);
+            glUseProgram(ripple_renderer.program);
+            r_clear(&ripple_renderer);
+            r_sync_uniforms(&ripple_renderer, width, height, time, xpos, ypos, 1);
+            r_quad_cr(&ripple_renderer, v2ff(0.0f), v2f(width * 0.5, height * 0.5), COLOR_BLACK_V4F);
+            r_sync_buffers(&ripple_renderer);
+
+            glDrawArraysInstanced(GL_TRIANGLES, 0, (GLsizei) ripple_renderer.vertex_buf_sz, 1);
+        }
+
+        if (objects_count > 0) {
+            float follow_x = sin(time * rotate_speed) * rotate_radius;
+            float follow_y = cos(time * rotate_speed) * rotate_radius;
+
+            object_update(&objects[0], delta_time, follow_x, follow_y);
+            for (size_t i = 1; i < objects_count; ++i) {
+                object_update(&objects[i], delta_time, objects[i - 1].x, objects[i - 1].y);
+            }
         }
 
         glfwSwapBuffers(window);
