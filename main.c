@@ -695,8 +695,8 @@ int main(void)
                 glUseProgram(r->programs[PROGRAM_SCENE]);
                 r_clear(r);
                 r_sync_uniforms(r, PROGRAM_SCENE, width, height, time, xpos, ypos, 0);
-                for (size_t i = 0; i < objects_count; ++i) {
-                    object_render(r, &objects[i]);
+                for (size_t i = objects_count; i > 0; --i) {
+                    object_render(r, &objects[i - 1]);
                 }
                 r_sync_buffers(r);
 
