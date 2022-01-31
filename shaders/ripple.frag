@@ -1,3 +1,5 @@
+// Applies sinc function to the user texture.
+// Stolen from http://adrianboeing.blogspot.com/2011/02/ripple-effect-in-webgl.html
 #version 330
 
 precision mediump float;
