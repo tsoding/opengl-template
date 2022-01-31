@@ -1,3 +1,4 @@
+// Simply pass through the user texture.
 #version 330
 
 precision mediump float;
