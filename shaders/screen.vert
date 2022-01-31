@@ -1,3 +1,5 @@
+// General purpose vertex shader that maps screen coordinates to NDC.
+// Supports position, uv and color of the vertex.
 #version 330
 
 layout(location = 0) in vec2 ver_pos;
